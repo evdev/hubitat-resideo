@@ -38,7 +38,7 @@ Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchang
 | Check | Status |
 |---|---|
 | Compile all four scripts on the physical hub | Passed through HPM v1.9.13, 2026-10-14 |
-| HPM manages the app and all three drivers at v0.1.9 | Passed: HPM v1.9.14 update completion, 2026-10-14 |
+| HPM manages the app and all three drivers at v0.1.10 | Passed: HPM update completion on the physical hubs, 2026-10-14 |
 | Integration account setup page opens | Passed, 2026-10-14 |
 | v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
 | Direct email/password sign-in | Passed on an additional physical hub: credentials accepted, token exchange HTTP 200 and 21 thermostats discovered; about 6.5 seconds, 2026-10-14 |
@@ -76,3 +76,5 @@ Live device initialization with v0.1.5 created the selected thermostat children 
 Version 0.1.8 was installed through HPM on the physical hub. The account remained connected across both code updates and reinitialization. All 21 existing thermostat children retained their identities; the total child-creation counter stayed at 22 (21 thermostats and one connection). Redacted diagnostics reported 21 selected, 21 activated, 21 resynchronized, zero queued/active requests, and current/push data for every thermostat. The live log recorded streamReady with source push and incoming temperature deltas. Status logging was enabled and the diagnostic debug window remained bounded to 30 minutes. No HVAC control writes were performed.
 
 The v0.1.9 sign-in progress update was installed through HPM on the additional password-test hub. Its new wait instructions appeared next to the password button, the connected account survived saving/reinitialization, and a fresh authenticated accounts response returned HTTP 200 with 21 thermostats. Progress phase sequencing and automatic-refresh transitions passed the Groovy 2.4 suite; no additional password attempt was required to verify token persistence.
+
+Version 0.1.10 was installed through HPM on the original physical hub. The same installed instance appeared under Integrations as Resideo Thermostats Integration. Setup retained a connected account and 21 selected thermostats, with both diagnostic buttons and the prepared report absent. Status/debug logging controls remained available. No child devices were removed for this UI update.
