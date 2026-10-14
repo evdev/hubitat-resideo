@@ -882,4 +882,25 @@ test('Guided browser UI avoids technical tools and refreshes only during HTTP si
     s.settings.browserRedirect = s.constants().browserRedirect + '?code=code&state=' + s.state.browserAttempt.nonce; s.finishBrowserLogin()
     assert s.mainPage().refreshInterval == 3
 }
+test('Login-page redirects collect cookies and preserve the final Auth0 server state') {
+    def s = app(); s.settings.debugEnable = true; s.testSignInConnection()
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=first', 'Set-Cookie': 'auth0=private-session; Path=/'])
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=second', 'Set-Cookie': 'did=private-device; Path=/'])
+    assert s.state.loginAttempt.authState == 'second'
+    assert s.requests[-1].params.headers.Cookie.contains('auth0=private-session')
+    s.respond(s.requests[-1], 200, '', ['Set-Cookie': '_csrf=private-csrf; Path=/'])
+    assert s.state.authStatus == 'Connection check passed. Ready to sign in.'
+    assert s.state.diagnosticEvents.any { it.event == 'authRedirect' && it.route == 'login' }
+    assert !s.logs.join().contains('private-session')
+}
+test('Login-page redirect loops and foreign hosts fail safely without forwarding cookies') {
+    def s = app(); s.testSignInConnection(); s.respond(s.requests[-1], 302, '', [Location: '/login?state=first'])
+    6.times { s.respond(s.requests[-1], 302, '', [Location: '/login?state=again']) }
+    assert !s.state.loginAttempt && s.state.lastError.contains('too many times')
+    s = app(); s.testSignInConnection(); s.respond(s.requests[-1], 302, '', [Location: '/login?state=first'])
+    s.respond(s.requests[-1], 302, '', [Location: 'https://other.example/login?state=private'])
+    assert s.requests.size() == 2 && !s.state.loginAttempt
+    rejected { s.trustedAuthRedirect('https://login.resideo.com@other.example/login') }
+    rejected { s.trustedAuthRedirect('http://login.resideo.com/login') }
+}
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

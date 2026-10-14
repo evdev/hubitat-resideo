@@ -1,4 +1,4 @@
-/* Resideo room sensor for Hubitat, v0.1.1. MIT; see LICENSE.upstream. */
+/* Resideo room sensor for Hubitat, v0.1.2. MIT; see LICENSE.upstream. */
 metadata {
     definition(name: 'Resideo Room Sensor', namespace: 'resideoHubitat', author: 'Ephrayim (evdev)', singleThreaded: true) {
         capability 'Sensor'

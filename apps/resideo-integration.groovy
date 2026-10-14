@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.1
+ * Resideo Integration for Hubitat, v0.1.2
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.1']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.2']
 }
 
 def mainPage() {
@@ -112,7 +112,7 @@ boolean debugLogging() {
 // Diagnostics deliberately use a fixed vocabulary rather than redacting arbitrary
 // bodies after the fact. Unknown events, strings and keys never reach logs/export.
 Map diagnosticLevels() {
-    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authConnectionReady: 'info',
+    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authRedirect: 'debug', authConnectionReady: 'info',
      authFailure: 'warn', reauthRequired: 'warn', tokenRefreshStarted: 'debug', tokenRefreshSucceeded: 'info',
      tokenRefreshRateLimited: 'warn', requestSent: 'debug', requestCompleted: 'debug', requestFailed: 'warn',
      requestRetry: 'debug', rateLimited: 'warn', queueFull: 'warn', staleCallback: 'debug', supersededRead: 'debug',
@@ -124,7 +124,8 @@ Map diagnosticLevels() {
 }
 Map diagnosticEnums() {
     [endpoint: ['accounts', 'shadow', 'rooms', 'configuration', 'priority', 'activation', 'negotiate', 'azureNegotiate', 'write'],
-     method: ['GET', 'POST', 'PUT'], flow: ['browser', 'password', 'connectionCheck'], csrf: ['present', 'missing'], step: ['authorize', 'loginPage', 'credentials', 'callback', 'resume', 'exchange', 'refresh'],
+     method: ['GET', 'POST', 'PUT'], flow: ['browser', 'password', 'connectionCheck'], csrf: ['present', 'missing'], session: ['present', 'missing'],
+     route: ['login', 'universalLogin', 'authorize', 'callback', 'other'], step: ['authorize', 'loginPage', 'credentials', 'callback', 'resume', 'exchange', 'refresh'],
      command: ['setThermostatMode', 'setThermostatFanMode', 'setHeatingSetpoint', 'setCoolingSetpoint', 'setHold',
          'setScheduleEnabled', 'setFeelsLikeEnabled', 'setAdaptiveRecoveryEnabled', 'setEmergencyHeatEnabled',
          'setSetpointLimits', 'setFreezeProtectionLowLimit', 'setOccupancySensitivity', 'setExcludeMotion', 'setExcludeTemperature', 'setSchedule'],
@@ -333,6 +334,7 @@ void startBrowserLogin() {
     if (state.refreshing) { state.lastError = 'Wait for token refresh to complete before signing in.'; return }
     clearLogin()
     state.lastError = null
+    state.diagnostics = null
     state.browserAttempt = newAuthorization(constants().browserRedirect as String)
     diagnostic('authStarted', [flow: 'browser'])
     state.authStatus = 'Waiting for browser sign-in'
@@ -387,6 +389,7 @@ void startPasswordLogin() {
     if (!settings.loginEmail || !settings.loginPassword) { state.lastError = 'Enter your First Alert email and password.'; return }
     clearLogin(false)
     state.lastError = null
+    state.diagnostics = null
     Map a = newAuthorization()
     state.loginAttempt = a + [cookies: [:]]
     state.authStatus = 'Signing in'
@@ -398,6 +401,7 @@ void startPasswordLogin() {
 void testSignInConnection() {
     if (signInInProgress() || state.refreshing) { state.lastError = 'Finish or cancel the current sign-in attempt before checking the connection.'; return }
     clearLogin()
+    state.diagnostics = null
     state.lastError = null; state.authStatus = 'Checking First Alert sign-in connection'
     Map a = newAuthorization()
     state.loginAttempt = a + [cookies: [:], connectionCheck: true]
@@ -456,7 +460,7 @@ void authResponse(resp, Map req) {
     try {
         if (a) {
             a.cookies = collectCookies(a.cookies ?: [:], headers); state.loginAttempt = a
-            diagnostic('authCookies', [step: step, count: a.cookies.size(), csrf: a.cookies._csrf ? 'present' : 'missing'])
+            diagnostic('authCookies', [step: step, count: a.cookies.size(), csrf: a.cookies._csrf ? 'present' : 'missing', session: a.cookies.auth0 || a.cookies.auth0_compat ? 'present' : 'missing'])
         }
         Map c = constants()
         String redirect = headerValue(headers, 'Location')
@@ -468,6 +472,16 @@ void authResponse(resp, Map req) {
                 state.loginAttempt = a
                 authHttp('loginPage', 'GET', c.auth + '/login?state=' + encode(a.authState), null, [:]); return
             case 'loginPage':
+                if (status in [301, 302, 303, 307, 308]) {
+                    if (!redirect || ((a.loginRedirects ?: 0) as int) >= 5) throw validationError('Resideo sign-in redirected too many times. Use browser sign-in.')
+                    String next = trustedAuthRedirect(redirect)
+                    a.loginRedirects = ((a.loginRedirects ?: 0) as int) + 1
+                    URI target = new URI(next)
+                    if (target.path == '/login' && parseQuery(next).state) a.authState = parseQuery(next).state
+                    state.loginAttempt = a
+                    diagnostic('authRedirect', [step: step, route: authRoute(target.path), count: a.loginRedirects])
+                    authHttp('loginPage', 'GET', next, null, [:]); return
+                }
                 if (status != 200 || !a.cookies?._csrf) throw validationError('Resideo login changed. Try browser sign-in.')
                 if (a.connectionCheck) {
                     diagnostic('authConnectionReady', [count: a.cookies.size(), csrf: 'present'])
@@ -535,6 +549,15 @@ void authResponse(resp, Map req) {
                 pump(); return
         }
     } catch (Exception e) { authFailure(validationMessage(e, 'Unexpected authentication response. Try browser sign-in.'), step == 'refresh') }
+}
+String trustedAuthRedirect(String value) {
+    URI target = new URI(constants().auth + '/').resolve(value)
+    if (target.scheme != 'https' || !target.host?.equalsIgnoreCase('login.resideo.com') || target.userInfo || !(target.port in [-1, 443]) || target.fragment)
+        throw validationError('Unexpected sign-in redirect. Use browser sign-in.')
+    target.toString()
+}
+String authRoute(String path) {
+    path == '/login' ? 'login' : path?.startsWith('/u/login') ? 'universalLogin' : path?.startsWith('/authorize') ? 'authorize' : path == '/login/callback' ? 'callback' : 'other'
 }
 
 String authenticationError(Map error) {
