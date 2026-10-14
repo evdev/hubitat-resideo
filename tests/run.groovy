@@ -960,4 +960,36 @@ test('Expired browser results are distinguished from account credentials and rev
     assert s.authenticationError([error: 'invalid_grant'], 'refresh').contains('session ended')
     assert s.authenticationError([code: 'invalid_user_password'], 'credentials').contains('Credentials')
 }
+test('Login buttons read settings after Hubitat persists the submitted form') {
+    def s = app(); s.appButtonHandler('signIn')
+    assert !s.requests && s.signInInProgress() && s.mainPage().refreshInterval == 3
+    s.settings.loginEmail = 'test@example.invalid'; s.settings.loginPassword = 'private-password'
+    s.updated(); s.advance(1000L)
+    assert s.requests.size() == 1 && s.state.loginAttempt
+    s = app(); s.startBrowserLogin(); String nonce = s.state.browserAttempt.nonce
+    s.appButtonHandler('finishBrowser'); assert !s.requests
+    s.settings.browserRedirect = s.constants().browserRedirect + '?code=private-code&state=' + nonce
+    s.advance(1000L)
+    assert s.requests.size() == 1 && s.requests[-1].data.step == 'exchange' && !s.settings.browserRedirect
+}
+test('Queued login actions coalesce clicks and cannot survive cancellation or disablement') {
+    def s = app(); s.appButtonHandler('signIn'); String id = s.state.authUiAction.id
+    s.appButtonHandler('signIn'); assert s.state.authUiAction.id == id
+    s.settings.loginEmail = 'test@example.invalid'; s.settings.loginPassword = 'private-password'
+    s.appButtonHandler('cancelLogin'); s.advance(1000L)
+    assert !s.requests && !s.state.authUiAction && !s.settings.loginPassword && !s.state.lastError
+    s.appButtonHandler('signIn'); s.settings.integrationEnabled = false; s.updated(); s.advance(1000L)
+    assert !s.requests && !s.state.authUiAction
+}
+test('Authentication fields save on blur and status appears next to each action') {
+    def s = app(); s.startBrowserLogin(); s.mainPage()
+    ['loginEmail', 'loginPassword', 'browserRedirect'].each { name ->
+        assert s.metadataCalls.find { it[0] == 'input' && it[1].contains(name) }[1].find { it instanceof Map }.submitOnChange == true
+    }
+    assert s.metadataCalls.count { it[0] == 'paragraph' && it[1].join().contains('role="status"') } == 4
+    s.state.authStatus = 'Connected'; assert s.authenticationBanner().contains('#146c2e') && s.authenticationBanner().contains('Account connected')
+    s.state.lastError = '<private>'; assert s.authenticationBanner().contains('#b71c1c') && s.authenticationBanner().contains('&lt;private&gt;')
+    s.state.lastError = null; s.state.authStatus = 'Connection check passed. Ready to sign in.'
+    assert !s.authenticationBanner().contains('Account connected')
+}
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

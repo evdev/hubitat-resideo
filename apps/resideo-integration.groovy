@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.3
+ * Resideo Integration for Hubitat, v0.1.4
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,26 +25,27 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.3']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.4']
 }
 
 def mainPage() {
     Map pageOptions = [name: 'mainPage', title: 'Resideo / First Alert', install: true, uninstall: true]
-    if (state.authRequest && state.authRequest.step != 'refresh') pageOptions.refreshInterval = 3
+    if (state.authUiAction || (state.authRequest && state.authRequest.step != 'refresh')) pageOptions.refreshInterval = 3
     dynamicPage(pageOptions) {
         section('Account') {
-            paragraph escapeHtml(state.authStatus ?: 'Sign in to your First Alert account.')
-            if (state.lastError) paragraph escapeHtml(state.lastError)
-            input 'loginEmail', 'text', title: 'First Alert email', required: false
-            input 'loginPassword', 'password', title: 'Password (cleared after sign-in)', required: false
+            paragraph authenticationBanner()
+            input 'loginEmail', 'text', title: 'First Alert email', required: false, submitOnChange: true
+            input 'loginPassword', 'password', title: 'Password (cleared after sign-in)', required: false, submitOnChange: true
             input 'signIn', 'button', title: 'Sign in with email and password'
+            paragraph authenticationBanner()
             input 'browserSignIn', 'button', title: 'Start browser sign-in'
             if (state.browserAttempt) {
                 paragraph '1. Open First Alert sign-in below and sign in on Resideo’s website. Keep this Hubitat page open.'
                 href url: state.browserAttempt.url, style: 'external', title: 'Open First Alert sign-in', description: 'Opens the secure sign-in page in another tab'
                 paragraph '2. When sign-in finishes, copy the full web address from the browser’s address bar. A blank page or “Cannot GET” message is expected on that final page. You can copy this address like any website address.'
-                input 'browserRedirect', 'password', title: '3. Paste the final web address here', required: false
+                input 'browserRedirect', 'password', title: '3. Paste the final web address here', required: false, submitOnChange: true
                 input 'finishBrowser', 'button', title: 'Connect my account'
+                paragraph authenticationBanner()
                 paragraph 'Use the link from this attempt and finish within 15 minutes. If you see the First Alert sign-in form again, complete sign-in before copying the address.'
                 if (state.browserAttempt.redirectUri != constants().browserRedirect) paragraph 'This link was created by an older version. Choose Start browser sign-in again to use the simpler flow.'
             }
@@ -71,9 +72,20 @@ def mainPage() {
             input 'showDiagnostics', 'button', title: 'Prepare redacted diagnostics'
             input 'clearDiagnostics', 'button', title: 'Clear diagnostic history and counters'
             input 'testSignInConnection', 'button', title: 'Check First Alert sign-in connection (no password needed)'
+            paragraph authenticationBanner()
             if (state.diagnostics) paragraph '<pre>' + escapeHtml(state.diagnostics) + '</pre>'
         }
     }
+}
+
+String authenticationBanner() {
+    String status = state.authStatus ?: 'Sign in to your First Alert account.'
+    boolean failed = !!state.lastError || status in ['Sign-in failed', 'Sign-in expired', 'Authentication required']
+    boolean good = !failed && (status == 'Connected' || status.startsWith('Connection check passed'))
+    String color = failed ? '#b71c1c' : good ? '#146c2e' : '#805500'
+    String background = failed ? '#ffebee' : good ? '#e8f5e9' : '#fff8e1'
+    String label = failed ? 'Sign-in needs attention' : good ? (status == 'Connected' ? 'Account connected' : 'Connection check passed') : 'Sign-in status'
+    '<div role="status" aria-live="polite" style="padding:12px;margin:8px 0;border:2px solid ' + color + ';border-radius:6px;background:' + background + ';color:' + color + '"><strong>' + label + ': ' + escapeHtml(status) + '</strong>' + (state.lastError ? '<br>' + escapeHtml(state.lastError) : '') + '</div>'
 }
 
 void installed() { initialize() }
@@ -84,6 +96,7 @@ void updated() {
     initialize()
 }
 boolean signInInProgress() {
+    if (state.authUiAction) return true
     Map attempt = state.browserAttempt ?: state.loginAttempt
     attempt && now() - ((attempt.created ?: 0L) as long) < 900000L
 }
@@ -125,6 +138,7 @@ Map diagnosticLevels() {
 Map diagnosticEnums() {
     [endpoint: ['accounts', 'shadow', 'rooms', 'configuration', 'priority', 'activation', 'negotiate', 'azureNegotiate', 'write'],
      method: ['GET', 'POST', 'PUT'], flow: ['browser', 'password', 'connectionCheck'], csrf: ['present', 'missing'], session: ['present', 'missing'],
+     exception: ['missingMethod', 'missingProperty', 'security', 'invalidUri', 'other'], operation: ['resolve', 'getPath', 'getHost', 'getScheme', 'split', 'other'],
      route: ['login', 'universalLogin', 'authorize', 'callback', 'other'], step: ['authorize', 'loginPage', 'credentials', 'callback', 'resume', 'exchange', 'refresh'],
      command: ['setThermostatMode', 'setThermostatFanMode', 'setHeatingSetpoint', 'setCoolingSetpoint', 'setHold',
          'setScheduleEnabled', 'setFeelsLikeEnabled', 'setAdaptiveRecoveryEnabled', 'setEmergencyHeatEnabled',
@@ -261,10 +275,10 @@ void stopIntegration(boolean deleting) {
 
 void appButtonHandler(String name) {
     switch (name) {
-        case 'signIn': startPasswordLogin(); break
+        case 'signIn': scheduleAuthUiAction('password'); break
         case 'browserSignIn': startBrowserLogin(); break
-        case 'finishBrowser': finishBrowserLogin(); break
-        case 'cancelLogin': clearLogin(); state.authStatus = state.tokens ? 'Connected' : 'Sign-in cancelled'; break
+        case 'finishBrowser': scheduleAuthUiAction('browser'); break
+        case 'cancelLogin': clearLogin(); state.lastError = null; state.authStatus = state.tokens ? 'Connected' : 'Sign-in cancelled'; break
         case 'discover': enqueueRead('accounts', null, constants().root + '/v1/accounts', [:]); break
         case 'applyDevices': synchronizeSelection(); break
         case 'removeOrphans':
@@ -328,6 +342,23 @@ Map newAuthorization(String redirectUri = constants().redirect) {
         code_challenge: base64url(MessageDigest.getInstance('SHA-256').digest(verifier.getBytes('US-ASCII'))),
         prompt: 'login', auth0Client: c.authClient]
     [url: c.auth + '/authorize?' + queryString(query), verifier: verifier, nonce: nonce, created: now(), redirectUri: redirectUri]
+}
+
+void scheduleAuthUiAction(String flow) {
+    // Hubitat calls the button handler before persisting that button's form.
+    // Defer reading settings; submitOnChange also saves fields on blur.
+    if (state.authRequest || state.authUiAction) return
+    Map action = [id: randomToken(), generation: generation(), flow: flow]
+    state.authUiAction = action
+    state.lastError = null
+    state.authStatus = 'Saving sign-in details'
+    runIn(1, 'performAuthUiAction', [data: action])
+}
+void performAuthUiAction(Map action) {
+    if (!state.authUiAction || state.authUiAction.id != action.id || action.generation != generation() || !enabled()) return
+    state.authUiAction = null
+    if (action.flow == 'password') startPasswordLogin()
+    else if (action.flow == 'browser') finishBrowserLogin()
 }
 
 void startBrowserLogin() {
@@ -415,6 +446,8 @@ void expireLogin() {
     state.lastError = 'Sign-in expired. Start again.'
 }
 void clearLogin(boolean clearPassword = true) {
+    state.authUiAction = null
+    unschedule('performAuthUiAction')
     state.browserAttempt = null
     state.loginAttempt = null
     if (state.authRequest?.step != 'refresh') state.authRequest = null
@@ -593,7 +626,10 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
                 }
                 pump(); return
         }
-    } catch (Exception e) { authFailure(validationMessage(e, 'Unexpected authentication response. Try browser sign-in.'), step == 'refresh') }
+    } catch (Exception e) {
+        diagnostic('authFailure', [step: step, exception: e instanceof MissingMethodException ? 'missingMethod' : e instanceof MissingPropertyException ? 'missingProperty' : e instanceof SecurityException ? 'security' : e instanceof java.net.URISyntaxException ? 'invalidUri' : 'other', operation: e instanceof MissingMethodException && e.method in ['resolve', 'getPath', 'getHost', 'getScheme', 'split'] ? e.method : 'other'])
+        authFailure(validationMessage(e, 'Unexpected authentication response. Try browser sign-in.'), step == 'refresh')
+    }
 }
 String trustedAuthRedirect(String value) {
     URI target = new URI(constants().auth + '/').resolve(value)
