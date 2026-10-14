@@ -553,10 +553,10 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
                     }
                     String next = trustedAuthRedirect(redirect)
                     a.loginRedirects = ((a.loginRedirects ?: 0) as int) + 1
-                    URI target = new URI(next)
-                    if (target.path == '/login' && parseQuery(next).state) a.authState = parseQuery(next).state
+                    String path = authPath(next)
+                    if (path == '/login' && parseQuery(next).state) a.authState = parseQuery(next).state
                     state.loginAttempt = a
-                    diagnostic('authRedirect', [step: step, route: authRoute(target.path), count: a.loginRedirects])
+                    diagnostic('authRedirect', [step: step, route: authRoute(path), count: a.loginRedirects])
                     authHttp('loginPage', 'GET', next, null, [:]); return
                 }
                 if (status == 200 && !a.cookies?._csrf && useNativeCookieFallback(a)) return
@@ -632,10 +632,15 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
     }
 }
 String trustedAuthRedirect(String value) {
-    URI target = new URI(constants().auth + '/').resolve(value)
-    if (target.scheme != 'https' || !target.host?.equalsIgnoreCase('login.resideo.com') || target.userInfo || !(target.port in [-1, 443]) || target.fragment)
+    // java.net.URI is rejected by some Hubitat sandbox versions. Only the
+    // known HTTPS origin and root-relative redirects are needed by Auth0.
+    String target = value?.startsWith('/') && !value.startsWith('//') ? constants().auth + value : value
+    if (!target || target.contains('#') || target.contains('\\') || !(target ==~ /(?i)^https:\/\/login\.resideo\.com(?::443)?(?:[\/?][^\s]*)?$/))
         throw validationError('Unexpected sign-in redirect. Use browser sign-in.')
-    target.toString()
+    target
+}
+String authPath(String value) {
+    value.replaceFirst('(?i)^https://login\\.resideo\\.com(?::443)?', '').split('[?#]', 2)[0]
 }
 String authRoute(String path) {
     path == '/login' ? 'login' : path?.startsWith('/u/login') ? 'universalLogin' : path?.startsWith('/authorize') ? 'authorize' : path == '/login/callback' ? 'callback' : 'other'
