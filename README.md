@@ -1,8 +1,8 @@
-# Resideo / First Alert for Hubitat
+# Resideo Thermostats Integration
 
 Native Hubitat app and drivers for thermostats registered in the **First Alert** app. Everything runs on the hub and talks directly to Resideo and its Azure SignalR service. No Home Assistant instance, bridge computer, or hosted callback is needed. Internet access and Resideo's cloud are required.
 
-**Version 0.1.9 — implementation candidate.** Automated verification uses Groovy 2.4.21 and a simulated Hubitat runtime. Installation through HPM and compilation of the app and all three drivers on a physical hub are verified. Browser and direct password sign-in, token exchange, account discovery, and retaining the connection after saving/reopening are verified on a physical hub. Broader hardware compatibility, dashboard behavior, and a live 24-hour soak still require live validation. See [validation](docs/validation.md).
+**Version 0.1.10 — implementation candidate.** Automated verification uses Groovy 2.4.21 and a simulated Hubitat runtime. Installation through HPM and compilation of the app and all three drivers on a physical hub are verified. Browser and direct password sign-in, token exchange, account discovery, and retaining the connection after saving/reopening are verified on a physical hub. Broader hardware compatibility, dashboard behavior, and a live 24-hour soak still require live validation. See [validation](docs/validation.md).
 
 ## Install
 

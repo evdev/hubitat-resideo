@@ -2,7 +2,7 @@
 
 ## Automated verification
 
-Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **100 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
+Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **101 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
 
 The test runner uses Groovy **2.4.21**, a Hubitat DSL/method stub, a deterministic scheduler, fake asynchronous HTTP, fake WebSocket transport, and the upstream sanitized fixtures. No account credentials or live thermostat are used.
 
@@ -63,7 +63,7 @@ Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchang
 5. Temporarily interrupt outbound SignalR access while retaining REST access. Confirm polling continues and a restored stream resynchronizes state before returning to push.
 6. Restart the hub. Confirm tokens and delayed sensitivity settings survive and device identifiers/labels remain unchanged.
 7. Observe for at least 24 real hours. Record feed renewals, token refreshes, request volume, runtime statistics, sensor identity, and confirmation behavior.
-8. Inspect the built-in redacted diagnostic export and bounded debug logs. Report unexpected errors without raw app state, login redirects, or unredacted network captures.
+8. Inspect the bounded, sanitized Hubitat debug logs. Report unexpected errors without raw app state, login redirects, or unredacted network captures.
 
 Do not mark a hardware/firmware combination validated until these checks have been observed on that combination. Do not infer broader model support from fixture tests.
 

@@ -1,4 +1,4 @@
-/* Resideo thermostat for Hubitat, v0.1.9. MIT; see LICENSE.upstream. */
+/* Resideo thermostat for Hubitat, v0.1.10. MIT; see LICENSE.upstream. */
 metadata {
     definition(name: 'Resideo Thermostat', namespace: 'resideoHubitat', author: 'Ephrayim (evdev)', singleThreaded: true) {
         capability 'Actuator'

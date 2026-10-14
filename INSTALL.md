@@ -7,6 +7,8 @@
 - Outbound HTTPS/WSS on port 443 to `login.resideo.com`, `api.ha.resideo.com`, and the negotiated `*.service.signalr.net` host.
 - A computer browser for browser-assisted login if direct sign-in is blocked.
 
+The installed integration appears under **Integrations** on Hubitat 2.5.0 and later. Older hubs retain their combined Apps page.
+
 No inbound port, Hubitat OAuth callback, developer.honeywellhome.com account, bridge service, or hosted endpoint is needed. Firmware 2.2.9 introduced the serialized-execution and redirect-control features used here, but this candidate does not yet have a tested minimum firmware or hardware matrix. Validate on an up-to-date hub first.
 
 ## Install with Hubitat Package Manager (recommended)
@@ -16,7 +18,7 @@ The package includes the integration app and all three required drivers. HPM dow
 1. Open **Hubitat Package Manager → Install → From a URL**.
 2. Enter `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json` and choose **Next**.
 3. Review the package and MIT license, leave **Configure the installed package after installation completes** enabled, and finish installation.
-4. HPM opens **Resideo Integration**. Authenticate using one of the methods below, then select your thermostats.
+4. HPM opens **Resideo Thermostats Integration**. Authenticate using one of the methods below, then select your thermostats.
 
 To make the package available when browsing custom repositories, use **HPM → Package Manager Settings → Add a Custom Repository** with `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/repository.json`. Listing in the community's global catalog is a separate step and is not required for URL installation.
 
@@ -30,7 +32,7 @@ For HPM-managed installations, update or repair through HPM and then open the in
 2. Under **Developer Tools → Drivers Code**, choose **New Driver**, paste `drivers/resideo-connection.groovy`, and save.
 3. Repeat for `drivers/resideo-thermostat.groovy` and `drivers/resideo-room-sensor.groovy`.
 4. Under **Apps Code**, choose **New App**, paste `apps/resideo-integration.groovy`, and save.
-5. Open **Apps → Add User App → Resideo Integration**.
+5. Open **Integrations → Add user integration → Resideo Thermostats Integration**.
 
 Do not create virtual thermostat or sensor devices manually. The app provisions and identifies them. Do not enable OAuth for this app; browser login uses the source client's registered redirect URI and a manual paste step.
 
@@ -41,7 +43,7 @@ Do not create virtual thermostat or sensor devices manually. The app provisions 
 3. Allow several seconds while the highlighted status shows the current sign-in step. The page refreshes automatically, including while it finds your thermostats. Wait for a final green status or red error before trying again. Green indicates success; red explains the next action. The same status appears at the top and beside the connection check.
 4. If CAPTCHA, MFA, or another automated-login restriction is reported, use browser sign-in below.
 
-The password is used only by Resideo's sign-in flow and is cleared after completion or cancellation. The hub retains the resulting access and refresh tokens. Hub administrators and backups can access app state; share the built-in redacted diagnostics rather than raw app state or login redirects.
+The password is used only by Resideo's sign-in flow and is cleared after completion or cancellation. The hub retains the resulting access and refresh tokens. Hub administrators and backups can access app state; use the sanitized Hubitat logs when requesting help; do not share raw app state or login redirects.
 
 ## Browser-assisted sign-in
 
@@ -84,4 +86,4 @@ Uninstalling the app removes its child devices through Hubitat's app lifecycle. 
 
 ## Optional logging
 
-In the app’s **Operation** section, status/warning logs default to enabled and debug logs default to disabled. Enable **Debug logging for 30 minutes** and save the app when reproducing a problem. The app automatically ends the capture; repeat saves or reconnects do not extend it. Driver device pages provide separate optional 30-minute debug captures for local forwarding or socket issues. See [troubleshooting](docs/troubleshooting.md#diagnostics) for what is recorded and how to export the bounded, redacted diagnostic history.
+In the app’s **Operation** section, status/warning logs default to enabled and debug logs default to disabled. Enable **Debug logging for 30 minutes** and save the app when reproducing a problem. The app automatically ends the capture; repeat saves or reconnects do not extend it. Driver device pages provide separate optional 30-minute debug captures for local forwarding or socket issues. See [troubleshooting](docs/troubleshooting.md#diagnostics) for what the sanitized logs record.

@@ -74,3 +74,7 @@ Live debug capture reproduced a full 100-request queue during a 21-thermostat bo
 ## Sign-in progress — v0.1.9
 
 Physical-hub logs confirmed direct password sign-in and authenticated thermostat discovery in about 6.5 seconds. Setup now explains the short wait, repeats the current password-flow step in each status banner, and describes browser completion and password-free checks separately. The page continues refreshing during account discovery and slows to 30 seconds during API cooldowns. Progress uses fixed text only. Regressions cover all six phases, failures, browser completion, discovery success/cooldown, and exclusion of secrets.
+
+## Integration placement and simpler setup — v0.1.10
+
+The app definition uses Hubitat’s documented Integrations menu field. The app, setup title and HPM listing are named Resideo Thermostats Integration, with stable package/component IDs. Existing default labels migrate without changing account state, selected devices or child identities; custom app labels remain intact. Diagnostic prepare/clear actions and report rendering are removed. Optional logging, its limits and internal sanitized history remain available for troubleshooting.

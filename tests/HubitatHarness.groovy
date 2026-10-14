@@ -2,6 +2,8 @@ import groovy.json.JsonOutput
 
 class FakeApp {
     String id = '42'
+    String label
+    void updateLabel(String value) { label = value }
     Map settings
     void removeSetting(String name) { settings.remove(name) }
     void updateSetting(String name, Map value) { settings[name] = value.type == 'bool' ? value.value.toString() == 'true' : value.value }

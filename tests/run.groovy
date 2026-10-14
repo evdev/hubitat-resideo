@@ -758,13 +758,10 @@ test('Command rejection logs classify useful validation and cloud failure reason
     s.rejectCommand(command('setHold', ['temporary']), 'Resideo rate limit reached. Retry after the cooldown.')
     assert s.state.diagnosticEvents[-1].reason == 'rateLimited'
 }
-test('First debug activity starts automatic expiry and diagnostic history can be cleared') {
+test('First debug activity starts automatic expiry in the app and drivers') {
     def s = app(); s.settings.debugEnable = true
     s.diagnostic('requestSent', [endpoint: 'accounts'])
     assert s.state.debugUntil == s.now() + 1800000L && s.jobs.any { it.handler == 'logsOff' }
-    s.appButtonHandler('showDiagnostics'); assert s.state.diagnostics
-    s.appButtonHandler('clearDiagnostics')
-    assert !s.state.diagnostics && !s.state.diagnosticEvents && !s.state.diagnosticCounters
     ['thermostat', 'room-sensor', 'connection'].each { name ->
         def d = load('drivers/resideo-' + name + '.groovy'); d.settings.debugEnable = true
         d.driverDebug('Resideo test activity')
@@ -1147,5 +1144,19 @@ test('Signed-in thermostat discovery refreshes the page until success and slows 
     assert !s.accountDiscoveryPending() && !s.mainPage().refreshInterval
     assert !s.authenticationProgress() && s.state.authStatus == 'Connected'
     s.state.authRequest = [step: 'refresh']; assert !s.authenticationProgress() && !s.mainPage().refreshInterval
+}
+test('Integration menu and renamed defaults preserve existing accounts and child identities') {
+    def s = ready(); s.app.label = 'Resideo Integration'; s.state.diagnostics = 'old-prepared-report'
+    Set children = s.children.keySet() as Set; String token = s.state.tokens.refresh_token
+    s.initialize(); s.mainPage()
+    assert s.app.label == 'Resideo Thermostats Integration'
+    assert s.state.tokens.refresh_token == token && s.settings.selectedThermostats == [mac]
+    assert s.children.keySet().containsAll(children) && !s.state.diagnostics
+    Map definition = s.metadataCalls.find { it[0] == 'definition' }[1]
+    assert definition.name == 'Resideo Thermostats Integration' && definition.menu == 'Integrations'
+    assert !s.metadataCalls.any { it[0] == 'input' && (it[1].contains('showDiagnostics') || it[1].contains('clearDiagnostics')) }
+    assert !s.metadataCalls.any { it[0] == 'paragraph' && it[1].join().contains('old-prepared-report') }
+    s.app.label = 'My custom thermostat account'; s.migrateAppPresentation()
+    assert s.app.label == 'My custom thermostat account'
 }
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

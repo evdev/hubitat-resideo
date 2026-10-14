@@ -34,7 +34,7 @@ To change settings unsupported by the upstream integration, use First Alert. Do 
 
 A green **Account connected** banner means authentication succeeded. A red **Cloud communication needs attention** warning in Operation describes a separate API problem; it does not mean you need to sign in again.
 
-Select **Prepare redacted diagnostics** in the app. Copy that output together with the error description, hub firmware, thermostat model, integration version, and which action failed.
+Include relevant Hubitat log entries, the error description, hub firmware, thermostat model, integration version, and which action failed when requesting help.
 
 The app's **Operation** section provides two logging settings:
 
@@ -43,14 +43,14 @@ The app's **Operation** section provides two logging settings:
 | **Status and warning logs** | On | Authentication outcomes, token refresh completion, discovery, device health, stream readiness, cloud failures, rate limits, and command results |
 | **Debug logging for 30 minutes** | Off | Authentication steps, correlated HTTP request/response numbers, HTTP status, elapsed milliseconds, queue size, retry delays, stream stages, feed renewal, mapped push properties, polling, and command acceptance/reconciliation |
 
-To investigate a problem, enable both settings and save the app, open Hubitat **Logs**, and reproduce the action. Then select **Prepare redacted diagnostics** and copy its output along with the relevant log entries and the device's `lastCommandError` if applicable. In debug mode, command comparison entries include validated requested and reported settings in the hub's temperature units; raw command arguments and request bodies are excluded. A request number connects its dispatch, response, and retry entries. Stream failures include a fixed reason code, connection generation, failure stage, and retry delay. Examples include `subscriptionRejected`, `stalled`, and `negotiationFailed`.
+To investigate a problem, enable both settings and save the app, open Hubitat **Logs**, and reproduce the action. Copy the relevant log entries and the device's `lastCommandError` if applicable. In debug mode, command comparison entries include validated requested and reported settings in the hub's temperature units; raw command arguments and request bodies are excluded. A request number connects its dispatch, response, and retry entries. Stream failures include a fixed reason code, connection generation, failure stage, and retry delay. Examples include `subscriptionRejected`, `stalled`, and `negotiationFailed`.
 
 Each of the three drivers also has **Driver debug logging for 30 minutes** on its device page. Enable this only when tracing device command forwarding, attribute delivery, or the socket driver's local execution. The app normally supplies the necessary diagnostics. Driver debug preferences operate independently of the app's logging settings.
 
 Debug logging turns itself off after 30 minutes. Saving settings, reconnecting, or restarting the integration does not extend an existing capture. Each app/driver limits debug output to 120 entries per minute and emits one suppression notice when that limit is reached. Repeated identical status/warning entries in the app are suppressed for one minute.
 
-The export retains up to 60 recent sanitized events, counters since installation or the last clearing, cooldown status, location stream status with selected/activated/resynchronized counts, and pending/deferred command counts. A connected stream becomes ready only when every selected thermostat is activated and resynchronized; these counts identify incomplete startup. Significant events are retained even with status logs disabled; detailed events require debug mode. Counters include suppressed activity, so they can reveal a recurring failure after debug mode expires. **Clear diagnostic history and counters** removes the saved capture without altering devices, credentials, or pending commands.
+The app keeps a bounded internal history and counters for troubleshooting. Detailed entries require debug mode. Setup does not include diagnostic report or history-clearing controls.
 
-Logs and exports use stable pseudonymous device/location references. They exclude credentials, email addresses, cookies, authorization codes, raw identifiers, device labels, full API URLs, raw payloads, and WebSocket status strings. Raw app state, browser redirects, hub backups, and developer-tool network captures can contain account credentials; they are not the diagnostic export.
+Logs use stable pseudonymous device/location references. They exclude credentials, email addresses, cookies, authorization codes, raw identifiers, device labels, full API URLs, raw payloads, and WebSocket status strings. Raw app state, browser redirects, hub backups, and developer-tool network captures can contain account credentials; do not share them.
 
 If a physical hub rejects compilation or a sandbox method, retain the exact compile/runtime error and firmware version. Groovy 2.4 compilation under the test harness checks language compatibility, not every Hubitat sandbox restriction.
