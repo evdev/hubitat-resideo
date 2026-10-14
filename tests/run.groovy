@@ -861,7 +861,7 @@ test('Saving the app preserves browser PKCE and in-flight password login callbac
     def s = app(); s.startBrowserLogin(); Map attempt = s.deepCopy(s.state.browserAttempt); long gen = s.generation()
     s.advance(10000L); s.updated()
     assert s.state.browserAttempt == attempt && s.generation() == gen
-    assert s.jobs.find { it.handler == 'expireLogin' }.at == (attempt.created as long) + 900000L
+    assert s.jobs.find { it.handler == 'expireLogin' }.at == (attempt.created as long) + 3600000L
     s = app(); s.settings.loginEmail = 'test@example.com'; s.settings.loginPassword = 'private-password'; s.startPasswordLogin()
     Map request = s.requests[-1]; gen = s.generation(); s.updated()
     assert s.state.authRequest.id == request.data.id && s.generation() == gen && s.settings.loginPassword == 'private-password'
@@ -869,7 +869,7 @@ test('Saving the app preserves browser PKCE and in-flight password login callbac
     assert s.requests.size() == 2 && s.requests[-1].verb == 'GET'
 }
 test('Expired and disabled sign-ins clear temporary data and report a truthful status') {
-    def s = app(); s.startBrowserLogin(); s.advance(900000L)
+    def s = app(); s.startBrowserLogin(); s.advance(3600000L)
     assert !s.state.browserAttempt && s.state.authStatus == 'Sign-in expired'
     s.startBrowserLogin(); s.settings.integrationEnabled = false; s.updated()
     assert !s.state.browserAttempt && !s.state.authRequest
@@ -998,5 +998,17 @@ test('Apache header values and header-prefixed strings normalize before auth par
     assert s.headerValue(headers, 'Location') == '/login?state=private'
     assert s.collectCookies([:], headers) == [auth0_compat: 'session', _csrf: 'csrf']
     assert s.headerValue([Location: 'Location: https://login.resideo.com/login?state=private'], 'Location').startsWith('https://')
+}
+test('Browser setup lasts one hour without extending password or cloud-code lifetimes') {
+    def s = app(); s.startBrowserLogin(); String nonce = s.state.browserAttempt.nonce
+    Map query = s.parseQuery(s.state.browserAttempt.url)
+    assert query.prompt == 'login' && query.max_age == '0'
+    s.advance(1200000L); s.updated()
+    assert s.state.browserAttempt.nonce == nonce && s.signInInProgress()
+    assert s.browserLoginDeadline().contains('40 minutes remaining')
+    assert s.loginLifetime(s.newAuthorization()) == 900000L
+    s.advance(2400000L); assert !s.state.browserAttempt
+    s.appButtonHandler('signIn'); s.advance(1000L)
+    assert s.state.authStatus == 'Enter your sign-in details' && s.state.lastError
 }
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

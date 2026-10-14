@@ -54,3 +54,7 @@ An anonymous reproduction showed that retaining only the last repeated Set-Cooki
 ## Input saving and visible status — v0.1.4
 
 Physical-hub testing showed that sign-in button callbacks can see settings before the current form is saved. Authentication fields now submit changes, and actions read them through a cancellable, generation-checked scheduled callback. Repeated clicks coalesce. Status is highlighted with text plus color: green for connection success, red for an error, and amber while waiting. The same status is repeated beside the password, browser-completion and connection-check controls. Header-object values are normalized before cookie/redirect parsing, and native requests use getAllHeaders to retain duplicate cookies. The automated suite has 88 passing groups. No raw exception messages, URLs, cookie values or credentials are logged.
+
+## Browser handoff lifetime — v0.1.5
+
+Live attempts expired during the browser-to-hub handoff. The pending browser setup request now lasts one hour and shows a local deadline and remaining minutes. Password setup remains limited to 15 minutes; HTTP timeouts, forced fresh login, state/PKCE checks and Resideo’s callback-code expiration are unchanged. Additional safe logs record queued/processed form actions and input-presence counts, without input values. The suite has 89 passing groups.

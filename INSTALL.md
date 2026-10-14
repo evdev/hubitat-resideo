@@ -52,7 +52,7 @@ The password is used only by Resideo's sign-in flow and is cleared after complet
 
 No Developer Tools, Network panel, phone-app launch, hosted callback, or browser extension is required. If you still see the sign-in form, finish signing in before copying the address. The copied address is a private, short-lived sign-in result; do not share it or add it to diagnostics.
 
-Use the link from the current attempt and finish within 15 minutes. Saving the app preserves an active attempt. A mistaken paste can be corrected without restarting; an expired attempt needs a new sign-in link. The integration validates the result's state and exact callback address, then exchanges it on the hub using the same callback and PKCE verifier.
+Use the link from the current attempt; it lasts one hour and the setup page shows its deadline. After completing First Alert sign-in, paste and connect the returned address immediately, because First Alert controls the lifetime of the resulting code. Saving the app preserves an active attempt. A mistaken paste can be corrected without restarting; an expired attempt needs a new sign-in link. The integration validates the result's state and exact callback address, then exchanges it on the hub using the same callback and PKCE verifier.
 
 ## Check the sign-in connection
 

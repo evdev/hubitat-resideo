@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.4
+ * Resideo Integration for Hubitat, v0.1.5
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.4']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.5']
 }
 
 def mainPage() {
@@ -46,7 +46,8 @@ def mainPage() {
                 input 'browserRedirect', 'password', title: '3. Paste the final web address here', required: false, submitOnChange: true
                 input 'finishBrowser', 'button', title: 'Connect my account'
                 paragraph authenticationBanner()
-                paragraph 'Use the link from this attempt and finish within 15 minutes. If you see the First Alert sign-in form again, complete sign-in before copying the address.'
+                paragraph escapeHtml(browserLoginDeadline())
+                paragraph 'After signing in, paste the final address and select Connect my account immediately. First Alert controls how quickly that result expires. If you see the sign-in form again, finish signing in before copying the address.'
                 if (state.browserAttempt.redirectUri != constants().browserRedirect) paragraph 'This link was created by an older version. Choose Start browser sign-in again to use the simpler flow.'
             }
             input 'cancelLogin', 'button', title: 'Cancel sign-in'
@@ -98,11 +99,19 @@ void updated() {
 boolean signInInProgress() {
     if (state.authUiAction) return true
     Map attempt = state.browserAttempt ?: state.loginAttempt
-    attempt && now() - ((attempt.created ?: 0L) as long) < 900000L
+    attempt && now() - ((attempt.created ?: 0L) as long) < loginLifetime(attempt)
+}
+long loginLifetime(Map attempt) { attempt?.redirectUri == constants().browserRedirect ? 3600000L : 900000L }
+String browserLoginDeadline() {
+    Map attempt = state.browserAttempt
+    if (!attempt) return ''
+    long remaining = Math.max(0L, loginLifetime(attempt) - (now() - (attempt.created as long)))
+    String deadline = new Date((attempt.created as long) + loginLifetime(attempt)).format('h:mm a z', location.timeZone)
+    'Setup link expires at ' + deadline + ' (about ' + (Math.ceil(remaining / 60000.0d) as int) + ' minutes remaining). After signing in, connect the returned result immediately.'
 }
 void scheduleLoginExpiry() {
     Map attempt = state.browserAttempt ?: state.loginAttempt
-    if (attempt) runIn(Math.max(1, Math.ceil((900000L - (now() - (attempt.created as long))) / 1000.0d) as int), 'expireLogin')
+    if (attempt) runIn(Math.max(1, Math.ceil((loginLifetime(attempt) - (now() - (attempt.created as long))) / 1000.0d) as int), 'expireLogin')
 }
 void uninstalled() { stopIntegration(true) }
 void logsOff() {
@@ -125,7 +134,7 @@ boolean debugLogging() {
 // Diagnostics deliberately use a fixed vocabulary rather than redacting arbitrary
 // bodies after the fact. Unknown events, strings and keys never reach logs/export.
 Map diagnosticLevels() {
-    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authRedirect: 'debug', authCookieFallback: 'info', authConnectionReady: 'info',
+    [initialized: 'info', debugDisabled: 'info', authUiQueued: 'debug', authUiProcessed: 'debug', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authRedirect: 'debug', authCookieFallback: 'info', authConnectionReady: 'info',
      authFailure: 'warn', reauthRequired: 'warn', tokenRefreshStarted: 'debug', tokenRefreshSucceeded: 'info',
      tokenRefreshRateLimited: 'warn', requestSent: 'debug', requestCompleted: 'debug', requestFailed: 'warn',
      requestRetry: 'debug', rateLimited: 'warn', queueFull: 'warn', staleCallback: 'debug', supersededRead: 'debug',
@@ -146,7 +155,7 @@ Map diagnosticEnums() {
      stage: ['stopped', 'negotiating', 'opening', 'handshake', 'subscribing', 'connected', 'backoff'],
      status: ['connecting', 'connected', 'disconnected', 'polling', 'disabled', 'authentication required', 'unavailable'],
      dataStatus: ['current', 'stale', 'offline', 'unavailable'], source: ['push', 'poll'],
-     reason: ['timeout', 'transport', 'captcha', 'mfa', 'credentialsRejected', 'blocked', 'invalidRedirect', 'expired',
+     reason: ['timeout', 'transport', 'captcha', 'mfa', 'credentialsRejected', 'blocked', 'missingInput', 'invalidRedirect', 'expired',
          'unexpectedResponse', 'validationRejected', 'cloudRejected', 'negotiationFailed', 'socketOpenFailed',
          'socketDisconnected', 'oversizedFrame', 'invalidFrame', 'handshakeRejected', 'subscriptionRejected',
          'serverClosed', 'stalled', 'feedRenewal', 'sendFailed', 'setupTimeout', 'invalidNotification', 'invalidExpiry', 'staleExpiry',
@@ -352,11 +361,13 @@ void scheduleAuthUiAction(String flow) {
     state.authUiAction = action
     state.lastError = null
     state.authStatus = 'Saving sign-in details'
+    diagnostic('authUiQueued', [flow: flow])
     runIn(1, 'performAuthUiAction', [data: action])
 }
 void performAuthUiAction(Map action) {
     if (!state.authUiAction || state.authUiAction.id != action.id || action.generation != generation() || !enabled()) return
     state.authUiAction = null
+    diagnostic('authUiProcessed', [flow: action.flow, count: action.flow == 'browser' ? (settings.browserRedirect ? 1 : 0) : (settings.loginEmail ? 1 : 0) + (settings.loginPassword ? 1 : 0)])
     if (action.flow == 'password') startPasswordLogin()
     else if (action.flow == 'browser') finishBrowserLogin()
 }
@@ -377,7 +388,7 @@ void finishBrowserLogin() {
     Map q = [:]
     String pasted = settings.browserRedirect?.toString()?.trim()
     try {
-        if (!attempt || now() - (attempt.created as long) >= 900000L) throw validationError('Browser sign-in expired. Start again.')
+        if (!attempt || now() - (attempt.created as long) >= loginLifetime(attempt)) throw validationError('Browser sign-in expired. Start again.')
         q = parseQuery(pasted)
         if (q.error) throw validationError('Browser sign-in was rejected. Start again.')
         if (!q.code) throw validationError('Sign in on First Alert first, then copy the final web address from the address bar and paste it here.')
@@ -389,7 +400,7 @@ void finishBrowserLogin() {
     } catch (Exception e) {
         state.lastError = validationMessage(e, 'Invalid browser redirect. Start sign-in again.')
         diagnostic('authFailure', [flow: 'browser', reason: authFailureReason(state.lastError as String)])
-        if (!attempt || now() - (attempt.created as long) >= 900000L || q.error) clearLogin()
+        if (!attempt || now() - (attempt.created as long) >= loginLifetime(attempt) || q.error) clearLogin()
         state.authStatus = state.browserAttempt ? 'Check the pasted address and try again' : state.tokens ? 'Connected; browser sign-in failed' : 'Start browser sign-in again'
     }
     app.removeSetting('browserRedirect')
@@ -417,7 +428,10 @@ Map parseQuery(String url) {
 
 void startPasswordLogin() {
     if (state.refreshing) { state.lastError = 'Wait for token refresh to complete before signing in.'; return }
-    if (!settings.loginEmail || !settings.loginPassword) { state.lastError = 'Enter your First Alert email and password.'; return }
+    if (!settings.loginEmail || !settings.loginPassword) {
+        state.authStatus = 'Enter your sign-in details'; state.lastError = 'Enter your First Alert email and password.'
+        diagnostic('authFailure', [flow: 'password', reason: 'missingInput']); return
+    }
     clearLogin(false)
     state.lastError = null
     state.diagnostics = null
