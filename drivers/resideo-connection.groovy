@@ -1,4 +1,4 @@
-/* Resideo SignalR connection for Hubitat, v0.1.10. MIT; see LICENSE.upstream.
+/* Resideo SignalR connection for Hubitat, v0.1.11. MIT; see LICENSE.upstream.
  * Protocol adapted from sfcodes/ha-resideo 0e2947b (c) 2026 Semyon Fishman.
  */
 import groovy.json.JsonOutput
@@ -59,15 +59,17 @@ void startConnection(long ag) {
     state.enabled = true
     state.accountGeneration = ag
     state.backoff = 1
-    requestConnection()
+    runInMillis(1, 'requestConnection')
 }
 void stopConnection() {
     state.enabled = false
     state.connectionGeneration = connectionGeneration() + 1L
     state.stage = 'stopped'
     state.buffer = ''
+    state.queuedSocket = null
     unschedule()
     configureLogging()
+    applyAttributes([connectionStatus: 'disconnected'])
     try { interfaces.webSocket.close() } catch (Exception ignored) { }
 }
 void requestConnection() {
@@ -82,11 +84,20 @@ void requestConnection() {
 }
 void openSocket(String url, long ag, long cg) {
     if (!state.enabled || ag != accountGeneration() || cg != connectionGeneration()) return
+    state.queuedSocket = [url: url, accountGeneration: ag, connectionGeneration: cg]
+    runInMillis(1, 'openQueuedSocket')
+}
+void openQueuedSocket() {
+    Map pending = state.queuedSocket ?: [:]
+    state.queuedSocket = null
+    if (!state.enabled || pending.accountGeneration != accountGeneration() || pending.connectionGeneration != connectionGeneration()) return
     state.stage = 'opening'
     traceStage()
-    try { interfaces.webSocket.connect(url) }
+    try { interfaces.webSocket.connect(pending.url as String) }
     catch (Exception ignored) { connectionFailed('WebSocket could not open') }
 }
+void queueNegotiationFailure(long cg) { runInMillis(1, 'negotiationFailed', [data: [generation: cg]]) }
+void negotiationFailed(Map ctx) { if (ctx.generation == connectionGeneration()) connectionFailed('Negotiation failed') }
 void webSocketStatus(String message) {
     if (!state.enabled || state.stage in ['stopped', 'backoff', 'negotiating']) return
     if (message == 'status: open' || message.toLowerCase().contains('status: open')) {
@@ -196,7 +207,13 @@ void status(String value, Map details = [:]) {
     applyAttributes([connectionStatus: value]); queueParentMessage(envelope('streamStatus') + [status: value] + details)
 }
 void applyAttributes(Map values) {
-    values.findAll { k, v -> k in ['connectionStatus', 'dataStatus'] && v != null }.each { k, v ->
+    state.pendingAttributes = (state.pendingAttributes ?: [:]) + values.findAll { k, v -> k in ['connectionStatus', 'dataStatus'] && v != null }
+    runInMillis(100, 'flushAttributes')
+}
+void flushAttributes() {
+    Map values = state.pendingAttributes ?: [:]
+    state.pendingAttributes = null
+    values.each { k, v ->
         if (device.currentValue(k.toString()) != v) sendEvent(name: k, value: v)
     }
 }

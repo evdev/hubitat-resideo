@@ -23,12 +23,14 @@ class FakeDevice {
     boolean active = false
     long cg = 0L
     long ag = 0L
-    Object currentValue(String key) { attributes[key] }
+    int snapshotCount = 0
+    int currentValueReads = 0
+    Object currentValue(String key) { currentValueReads++; attributes[key] }
     String getDataValue(String key) { data[key] }
     void updateDataValue(String key, String value) { data[key] = value }
     void updateSetting(String name, Map value) { settings[name] = value.type == 'bool' ? value.value.toString() == 'true' : value.value }
     void applyAttributes(Map values) { attributes.putAll(values) }
-    void applySnapshot(Map values) { attributes.putAll(values) }
+    void applySnapshot(Map values) { snapshotCount++; attributes.putAll(values) }
     void deleteCurrentState(String name) { attributes.remove(name) }
     void startConnection(long gen) { active = true; ag = gen; cg++; calls << ['start', gen] }
     void stopConnection() { active = false; cg++; calls << ['stop'] }
@@ -38,6 +40,7 @@ class FakeDevice {
     List drainMessages() { List result = messages; messages = []; result }
     void openSocket(String url, long gen, long cgen) { calls << ['open', url, gen, cgen] }
     void connectionFailed(String reason) { calls << ['failed', reason] }
+    void queueNegotiationFailure(long gen) { calls << ['failed', 'Negotiation failed'] }
 }
 class FakeParent {
     List messages = []

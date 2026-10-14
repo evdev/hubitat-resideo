@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.10
+ * Resideo Integration for Hubitat, v0.1.11
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.10']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.11']
 }
 
 def mainPage() {
@@ -364,7 +364,9 @@ void removeSavedOrphans(Map ctx) {
 void childMessage(evt) {
     def child = getChildDevices().find { it.id.toString() == evt.value?.toString() }
     if (!child) return
-    asList(child.drainMessages()).each { message -> if (message instanceof Map) processMessage(message as Map) }
+    // Give each drained packet its own execution. A failed status publication
+    // must not discard the negotiation or command packet behind it.
+    asList(child.drainMessages()).each { message -> if (message instanceof Map) postMessage(message as Map) }
 }
 // Retain this scheduling entrypoint for compatibility; current drivers use the
 // event bridge to avoid acquiring parent and child gates in opposite orders.
@@ -1140,7 +1142,7 @@ void maintenance() {
             diagnostic('fallbackPoll', [device: diagnosticDevice(mac as String), retrySeconds: pollingMinutes() * 60])
             refreshDevice(mac, now() - ((d.lastMetadata ?: 0L) as long) >= 1800000L)
         }
-        publishDevice(mac)
+        publishHealthChange(mac)
     }
     runIn(60, 'maintenance')
 }
@@ -1182,7 +1184,7 @@ void connectNegotiated(Map r, Map data) {
     getChildDevice(connectionId(r.context.locationId as String)).openSocket(url, generation(), r.context.connectionGeneration as long)
 }
 void streamFailed(Map context) {
-    if (currentConnection(context)) getChildDevice(connectionId(context.locationId as String)).connectionFailed('Negotiation failed')
+    if (currentConnection(context)) getChildDevice(connectionId(context.locationId as String)).queueNegotiationFailure(context.connectionGeneration as long)
 }
 void streamStatus(Map msg) {
     if (!currentConnection(msg)) return
@@ -1195,10 +1197,9 @@ void streamStatus(Map msg) {
         stage: msg.stage, retrySeconds: msg.retrySeconds, generation: msg.connectionGeneration]
     if (msg.status == 'disconnected') diagnostic(msg.reason == 'feedRenewal' ? 'feedRenewal' : 'streamFailure', detail)
     else diagnostic('streamStatus', detail)
-    locationMacs(msg.locationId as String).each { mac ->
-        if (msg.status != 'connected') refreshDevice(mac, false)
-        publishDevice(mac)
-    }
+    // Reconnect attempts must not start another account-wide REST refresh.
+    // Maintenance owns fallback polling; successful subscription owns resync.
+    locationMacs(msg.locationId as String).each { publishHealthChange(it.toString()) }
 }
 List locationMacs(String loc) { selectedMacs().findAll { (state.discovered ?: [:])[it]?.locationId == loc } }
 void activateStream(Map msg) {
@@ -1702,6 +1703,10 @@ void publishDevice(String mac) {
         Map last = (state.lastCommand ?: [:])[pendingKey(mac, aid)] ?: [:]
         sensor.applySnapshot(attrs + ownHealth + [commandStatus: last.status ?: 'idle', lastCommandError: last.error ?: ''])
     }
+}
+void publishHealthChange(String mac) {
+    Map health = healthAttributes(mac).findAll { k, v -> k != 'lastUpdated' }
+    if ((state.diagnosticHealth ?: [:])[mac] != health) publishDevice(mac)
 }
 Map diagnosticSnapshot() {
     [version: constants().version, upstream: '0e2947b8ad83608ccf212dd2638f2aa3eda06eaa',

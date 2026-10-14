@@ -2,7 +2,7 @@
 
 ## Automated verification
 
-Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **101 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
+Verified on **2026-10-14**, including the live-load regression checks: all **104 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
 
 The test runner uses Groovy **2.4.21**, a Hubitat DSL/method stub, a deterministic scheduler, fake asynchronous HTTP, fake WebSocket transport, and the upstream sanitized fixtures. No account credentials or live thermostat are used.
 
@@ -78,3 +78,5 @@ Version 0.1.8 was installed through HPM on the physical hub. The account remaine
 The v0.1.9 sign-in progress update was installed through HPM on the additional password-test hub. Its new wait instructions appeared next to the password button, the connected account survived saving/reinitialization, and a fresh authenticated accounts response returned HTTP 200 with 21 thermostats. Progress phase sequencing and automatic-refresh transitions passed the Groovy 2.4 suite; no additional password attempt was required to verify token persistence.
 
 Version 0.1.10 was installed through HPM on the original physical hub. The same installed instance appeared under Integrations as Resideo Thermostats Integration. Setup retained a connected account and 21 selected thermostats, with both diagnostic buttons and the prepared report absent. Status/debug logging controls remained available. No child devices were removed for this UI update.
+
+Live inspection of v0.1.10 found repeated Hubitat excessive-load exceptions during child snapshot publication and negotiation setup timeouts. Publication could abort a drained bridge batch before its negotiation packet executed, and reconnect statuses initiated additional account-wide reads. Version 0.1.11 defers native attribute events and connection startup/socket operations to driver callbacks, coalesces snapshots, caches emitted attribute values, isolates bridge packets, and retains the configured fallback polling cadence during reconnect failures. Regression coverage includes 21-device failure loops, unchanged maintenance, stale-state transitions, packet survival after a publication failure, and driver event coalescing. Physical-hub acceptance of this correction remains pending.

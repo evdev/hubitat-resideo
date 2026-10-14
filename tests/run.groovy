@@ -233,7 +233,7 @@ test('Off-by-one sensor headers route to the successor and never change control 
 }
 test('SignalR parses partial/coalesced frames and activates only after subscription completion') {
     def s = load('drivers/resideo-connection.groovy'); s.device.data.locationId = 'loc'
-    s.startConnection(1L); long cg = s.connectionGeneration(); s.openSocket('wss://test', 1L, cg)
+    s.startConnection(1L); s.advance(1L); long cg = s.connectionGeneration(); s.openSocket('wss://test', 1L, cg); s.advance(1L)
     s.webSocketStatus('status: open'); assert s.interfaces.webSocket.sent[-1].contains('"protocol":"json"')
     s.parse('{'); s.parse('}\u001e'); assert s.state.stage == 'subscribing'
     assert !messages(s).any { it.kind == 'streamActivated' }
@@ -246,7 +246,7 @@ test('SignalR parses partial/coalesced frames and activates only after subscript
 }
 test('SignalR rejection, stalled connections, renewal, and stale expiry timestamps') {
     def s = load('drivers/resideo-connection.groovy'); s.device.data.locationId = 'loc'
-    s.startConnection(1L); s.openSocket('wss://test', 1L, s.connectionGeneration()); s.webSocketStatus('status: open')
+    s.startConnection(1L); s.advance(1L); s.openSocket('wss://test', 1L, s.connectionGeneration()); s.advance(1L); s.webSocketStatus('status: open')
     s.parse('{}\u001e'); s.parse('{"type":3,"invocationId":"1","error":"denied"}\u001e')
     assert s.state.stage == 'backoff'; s.advance(1000L); assert s.state.stage == 'negotiating'
     s.state.stage = 'connected'; s.state.lastFrame = s.now() - 45000L; s.keepalive([generation: s.connectionGeneration()])
@@ -296,9 +296,9 @@ test('Diagnostics use a whitelist and never export account credentials or identi
 test('Driver commands delegate and unsupported schedule editing reports a clear error') {
     def t = load('drivers/resideo-thermostat.groovy'); t.device.data.mac = mac
     t.emergencyHeat(); assert messages(t)[-1].args == ['emergency heat']
-    t.setSchedule([:]); assert t.device.attributes.commandStatus == 'rejected'
-    t.applyAttributes([temperature: 72, dataStatus: 'current']); int count = t.device.events.size()
-    t.applyAttributes([temperature: 72]); assert t.device.events.size() == count
+    t.setSchedule([:]); t.advance(100L); assert t.device.attributes.commandStatus == 'rejected'
+    t.applyAttributes([temperature: 72, dataStatus: 'current']); t.advance(100L); int count = t.device.events.size()
+    t.applyAttributes([temperature: 72]); t.advance(100L); assert t.device.events.size() == count
     def room = load('drivers/resideo-room-sensor.groovy'); room.device.data = [mac: mac, accessoryId: '1']
     room.setExcludeTemperature('on'); assert messages(room)[-1].accessoryId == '1'
 }
@@ -327,7 +327,9 @@ test('Every pinned upstream entity has a declared and populated Hubitat equivale
 test('Sparse snapshots clear unsupported readings and retain an inactive combined setpoint') {
     def t = load('drivers/resideo-thermostat.groovy')
     t.applySnapshot([temperature: 72, carbonDioxide: 500, thermostatSetpoint: 74])
+    t.advance(100L)
     t.applySnapshot([temperature: 72])
+    t.advance(100L)
     assert !t.device.attributes.containsKey('carbonDioxide')
     assert t.device.attributes.thermostatSetpoint == 74
     def s = ready(); s.state.cache[mac].shadow.Reported.SystemSwitch = 'Auto'; s.state.cache[mac].shadow.Reported.OperationStatus.Mode = 'EquipmentOff'
@@ -588,7 +590,7 @@ test('Single-function equipment does not require an unsupported counterpart setp
 }
 test('Manual reconnect closes the old socket and ignores its close notification during negotiation') {
     def c = load('drivers/resideo-connection.groovy'); c.device.data.locationId = 'loc'
-    c.startConnection(1L); c.openSocket('wss://test', 1L, c.connectionGeneration()); c.webSocketStatus('status: open'); c.parse('{}\u001e')
+    c.startConnection(1L); c.advance(1L); c.openSocket('wss://test', 1L, c.connectionGeneration()); c.advance(1L); c.webSocketStatus('status: open'); c.parse('{}\u001e')
     int closed = c.interfaces.webSocket.closed; long generation = c.connectionGeneration()
     c.refresh()
     assert c.connectionGeneration() > generation && c.interfaces.webSocket.closed > closed
@@ -698,7 +700,7 @@ test('Command diagnostics distinguish accepted, confirmed, failed and unconfirme
 }
 test('Connection diagnostics retain safe stage, failure reason and backoff') {
     def c = load('drivers/resideo-connection.groovy'); c.settings.debugEnable = true; c.device.data.locationId = 'loc'
-    c.startConnection(1L); c.openSocket('wss://cloud/?access_token=private-token', 1L, c.connectionGeneration()); c.webSocketStatus('status: open')
+    c.startConnection(1L); c.advance(1L); c.openSocket('wss://cloud/?access_token=private-token', 1L, c.connectionGeneration()); c.advance(1L); c.webSocketStatus('status: open')
     c.parse('{"error":"private-token"}\u001e')
     Map failure = messages(c).find { it.kind == 'streamStatus' && it.status == 'disconnected' }
     assert failure.reason == 'handshakeRejected' && failure.stage == 'handshake' && failure.retrySeconds == 1
@@ -728,11 +730,13 @@ test('Each driver supports bounded opt-in logging and preserves automatic shutof
 test('Driver forwarding and local rejections can be diagnosed without logging arguments') {
     def t = load('drivers/resideo-thermostat.groovy'); t.settings.debugEnable = true; t.device.data.mac = mac
     t.setHeatingSetpoint('private-command-value'); t.applyAttributes([temperature: 70]); t.refresh(); t.setSchedule('private-schedule')
+    t.advance(100L)
     assert t.logs.any { it.contains('command forwarded') } && t.logs.any { it.contains('attributes updated') }
     assert messages(t)[-1].kind == 'driverRejected' && messages(t)[-1].command == 'setSchedule'
     assert !t.logs.join().contains('private-command-value') && !t.logs.join().contains('private-schedule') && !t.logs.join().contains(mac)
     def d = load('drivers/resideo-room-sensor.groovy'); d.settings.debugEnable = true; d.device.data.mac = mac
     d.setOccupancySensitivity('private-command-value'); d.applyAttributes([occupancy: 'occupied']); d.refresh()
+    d.advance(100L)
     assert d.logs.size() == 3 && !d.logs.join().contains('private-command-value')
 }
 test('Debug command comparison records only valid setting values in hub units') {
@@ -1027,7 +1031,7 @@ test('Driver callbacks use native events even while the parent gate is held') {
     ['drivers/resideo-thermostat.groovy', 'drivers/resideo-room-sensor.groovy', 'drivers/resideo-connection.groovy'].each { path ->
         def d = load(path); d.parent.gateHeld = true
         d.device.data = [appId: '42', accountGeneration: '1', mac: mac, locationId: 'loc', accessoryId: '1']
-        if (path.contains('connection')) d.startConnection(1L)
+        if (path.contains('connection')) { d.startConnection(1L); d.advance(1L) }
         else d.refresh()
         assert !d.parent.messages && d.locationEvents && messages(d)
         assert d.locationEvents.every { it.name == 'resideoBridge-42' && it.value == d.device.id && !it.data }
@@ -1038,7 +1042,8 @@ test('The app drains only owned child outboxes and rejects stale generations') {
     def s = ready(); def child = s.getChildDevice(s.deviceId('thermostat', mac))
     child.messages = [[kind: 'refresh', mac: mac, accountGeneration: 1L], [kind: 'command', mac: mac, command: 'setHeatingSetpoint', args: [70], accountGeneration: 0L]]
     s.childMessage([value: 'unowned-device']); assert child.messages && !s.requests
-    s.childMessage([value: child.id]); assert !child.messages && s.requests
+    s.childMessage([value: child.id]); assert !child.messages && !s.requests
+    s.advance(1L); assert s.requests
     assert s.requests.every { it.verb == 'GET' } && s.state.diagnosticCounters.staleCallback == 1
     int count = s.requests.size(); s.childMessage([value: child.id]); assert s.requests.size() == count
 }
@@ -1079,7 +1084,9 @@ test('Recovered cloud errors do not turn a connected account red or erase auth f
 }
 test('SignalR explicitly false subscription completion is rejected') {
     def c = load('drivers/resideo-connection.groovy'); c.device.data = [locationId: 'loc']; c.startConnection(1L)
+    c.advance(1L)
     c.openSocket('wss://example.service.signalr.net/client', 1L, c.connectionGeneration())
+    c.advance(1L)
     c.webSocketStatus('status: open'); c.parse('{}\u001e')
     c.parse(JsonOutput.toJson([type: 3, invocationId: '1', result: false]) + '\u001e')
     assert c.state.stage == 'backoff' && !messages(c).any { it.kind == 'streamActivated' }
@@ -1105,6 +1112,71 @@ test('Twenty-one thermostat bootstrap shares priority reads with feed activation
     assert s.state.streams.loc.ready
     assert s.diagnosticSnapshot().streams[0].activated == 21
     assert s.diagnosticSnapshot().streams[0].resynchronized == 21
+}
+test('Reconnect failures keep twenty-one thermostat reads at the fallback interval') {
+    def s = ready(); List devices = (1..21).collect { 'DEVICE' + it }
+    s.settings.selectedThermostats = devices
+    s.state.discovered = devices.collectEntries { [(it): [name: 'Thermostat', locationId: 'loc']] }
+    s.state.cache = devices.collectEntries { [(it): [shadow: fixture('device'), configuration: fixture('configuration'),
+        unsupported: ['rooms'], lastUpdated: s.now(), lastPoll: s.now(), lastMetadata: s.now()]] }
+    devices.each { s.ensureChild('Resideo Thermostat', s.deviceId('thermostat', it), 'Thermostat', [kind: 'thermostat', mac: it]) }
+    def c = s.ensureChild('Resideo Connection', s.connectionId('loc'), 'Connection', [kind: 'connection', locationId: 'loc'])
+    c.startConnection(s.generation())
+    s.state.streams = [loc: [status: 'connected', ready: true]]
+    devices.each { s.publishDevice(it) }
+    int before = s.children.values().sum { it.snapshotCount }
+    10.times {
+        s.streamStatus([locationId: 'loc', connectionGeneration: c.cg, status: it % 2 ? 'connecting' : 'disconnected', reason: 'setupTimeout'])
+    }
+    assert !s.requests && !s.state.httpQueue
+    assert s.children.values().sum { it.snapshotCount } == before + 21
+    s.maintenance(); s.advance(240000L)
+    assert !s.requests && s.children.values().sum { it.snapshotCount } == before + 21
+    s.advance(60000L)
+    assert s.requests.size() + s.state.httpQueue.size() == 21
+    assert (s.requests.collect { it.params.uri } + s.state.httpQueue.collect { it.path }).every { !it.endsWith('/rooms') && !it.endsWith('/configuration') }
+    s.unschedule('maintenance'); s.state.cache.each { k, v -> v.lastUpdated = s.now() - 1000000L }
+    s.maintenance()
+    assert devices.every { s.getChildDevice(s.deviceId('thermostat', it)).attributes.dataStatus == 'stale' }
+}
+test('A failed bridge status execution cannot discard the following negotiation packet') {
+    def s = ready()
+    def c = s.ensureChild('Resideo Connection', s.connectionId('loc'), 'Connection', [kind: 'connection', locationId: 'loc'])
+    c.startConnection(s.generation())
+    Map context = [accountGeneration: s.generation(), locationId: 'loc', connectionGeneration: c.cg]
+    c.messages = [context + [kind: 'streamStatus', status: 'connecting'], context + [kind: 'streamRequest']]
+    s.metaClass.streamStatus = { Map ignored -> throw new IllegalStateException('simulated publication failure') }
+    s.childMessage([value: c.id])
+    assert !c.messages && s.jobs.count { it.handler == 'processMessage' } == 2
+    boolean failed = false
+    try { s.advance(1L) } catch (IllegalStateException expected) { failed = true }
+    assert failed
+    s.advance(0L)
+    assert s.requests.size() == 1 && s.requests[0].params.uri.contains('/Hub/negotiate')
+}
+test('Drivers coalesce snapshots outside parent calls and avoid repeated platform reads') {
+    ['thermostat', 'room-sensor'].each { name ->
+        def d = load('drivers/resideo-' + name + '.groovy')
+        d.applySnapshot([temperature: 70, dataStatus: 'current'])
+        d.applySnapshot([temperature: 71, dataStatus: 'current'])
+        d.applyAttributes([commandStatus: 'pending'])
+        assert !d.device.events && d.jobs.count { it.handler == 'flushProjection' } == 1
+        d.advance(100L)
+        assert d.device.attributes == [temperature: 71, dataStatus: 'current', commandStatus: 'pending']
+        int reads = d.device.currentValueReads; int events = d.device.events.size()
+        d.applySnapshot([temperature: 71, dataStatus: 'current', commandStatus: 'pending'])
+        d.advance(100L)
+        assert d.device.currentValueReads == reads && d.device.events.size() == events
+        d.applySnapshot([temperature: 72])
+        d.advance(100L)
+        assert d.device.attributes == [temperature: 72]
+        assert !d.state.emittedAttributes.containsKey('dataStatus')
+    }
+    def c = load('drivers/resideo-connection.groovy')
+    c.startConnection(1L); c.advance(101L)
+    assert c.device.attributes.connectionStatus == 'connecting'
+    c.stopConnection(); c.advance(100L)
+    assert c.device.attributes.connectionStatus == 'disconnected'
 }
 test('Activation arriving during a priority read gets a fresh generation-scoped request') {
     def s = ready(); def c = s.ensureChild('Resideo Connection', s.connectionId('loc'), 'Connection', [kind: 'connection', locationId: 'loc'])

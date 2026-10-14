@@ -1,4 +1,4 @@
-/* Resideo thermostat for Hubitat, v0.1.10. MIT; see LICENSE.upstream. */
+/* Resideo thermostat for Hubitat, v0.1.11. MIT; see LICENSE.upstream. */
 metadata {
     definition(name: 'Resideo Thermostat', namespace: 'resideoHubitat', author: 'Ephrayim (evdev)', singleThreaded: true) {
         capability 'Actuator'
@@ -147,14 +147,48 @@ void dispatch(String command, List args) {
     queueParentMessage([kind: 'command', mac: getDataValue('mac'), command: command, args: args])
 }
 void applySnapshot(Map values) {
-    (state.projectedAttributes ?: []).findAll { !values.containsKey(it) && it != 'thermostatSetpoint' }.each { device.deleteCurrentState(it.toString()) }
-    state.projectedAttributes = values.keySet().toList()
-    applyAttributes(values)
+    state.pendingProjection = [full: true, values: values]
+    scheduleProjection()
 }
 void applyAttributes(Map values) {
+    Map pending = state.pendingProjection ?: [full: false, values: [:]]
+    pending.values = (pending.values ?: [:]) + values
+    state.pendingProjection = pending
+    scheduleProjection()
+}
+void scheduleProjection() {
+    // Parent calls only queue data. Emit native events in this driver's own
+    // short execution, coalescing adjacent REST responses and pushed fields.
+    if (!state.projectionDue || now() >= (state.projectionDue as long)) {
+        state.projectionDue = now() + 100L
+        runInMillis(100, 'flushProjection')
+    }
+}
+void flushProjection() {
+    Map pending = state.pendingProjection ?: [:]
+    state.projectionDue = null
+    if (!pending) return
+    Map values = pending.values ?: [:]
+    if (pending.full) {
+        Map emitted = state.emittedAttributes ?: [:]
+        (state.projectedAttributes ?: []).findAll { !values.containsKey(it) && it != 'thermostatSetpoint' }.each {
+            device.deleteCurrentState(it.toString()); emitted.remove(it.toString())
+        }
+        state.emittedAttributes = emitted
+        state.projectedAttributes = values.keySet().toList()
+    }
+    emitAttributes(values)
+    state.pendingProjection = null
+}
+void emitAttributes(Map values) {
     int changed = 0
+    Map emitted = state.emittedAttributes ?: [:]
     values.each { name, value ->
-        if (value == null || device.currentValue(name.toString()) == value) return
+        if (value == null) return
+        String key = name.toString()
+        Object previous = emitted.containsKey(key) ? emitted[key] : device.currentValue(key)
+        emitted[key] = value
+        if (previous == value) return
         Map event = [name: name, value: value]
         if (name in ['temperature', 'outdoorTemperature', 'heatingSetpoint', 'coolingSetpoint', 'thermostatSetpoint', 'heatSetpointMin', 'heatSetpointMax', 'coolSetpointMin', 'coolSetpointMax', 'freezeProtectionLowLimit']) event.unit = '°' + getTemperatureScale()
         if (name in ['humidity', 'outdoorHumidity', 'demand']) event.unit = '%'
@@ -165,6 +199,7 @@ void applyAttributes(Map values) {
         sendEvent(event)
         changed++
     }
+    state.emittedAttributes = emitted
     if (changed) driverDebug 'Resideo thermostat attributes updated; count=' + changed
 }
 
