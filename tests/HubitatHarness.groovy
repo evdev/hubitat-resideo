@@ -51,9 +51,10 @@ class FakeResponse {
     Object body
     Map headers = [:]
     boolean errorBodyOnly = false
+    Object errorDataBody
     int getStatus() { status }
     String getData() { if (errorBodyOnly) throw new Exception('Body available through getErrorData'); body instanceof String ? body : JsonOutput.toJson(body) }
-    String getErrorData() { body instanceof String ? body : JsonOutput.toJson(body) }
+    String getErrorData() { Object value = errorDataBody != null ? errorDataBody : body; value instanceof String ? value : JsonOutput.toJson(value) }
     Map getHeaders() { headers }
 }
 // Models the header-wrapper behavior seen on the physical hub: its findAll
@@ -67,6 +68,12 @@ class FakeHubitatHeaders extends LinkedHashMap {
 }
 class FakeBadCookie {
     String toString() { throw new Exception('Malformed cookie metadata') }
+}
+class FakeNativeResponse {
+    int status
+    List headers = []
+    int getStatus() { status }
+    Object getHeaders() { headers }
 }
 class FakeAtomicState {
     Map durable
@@ -135,11 +142,19 @@ abstract class HubitatScript extends Script {
     void asynchttpGet(String callback, Map params, Map data) { http('GET', callback, params, data) }
     void asynchttpPost(String callback, Map params, Map data) { http('POST', callback, params, data) }
     void asynchttpPut(String callback, Map params, Map data) { http('PUT', callback, params, data) }
+    void httpGet(Map params, Closure callback) { requests << [verb: 'GET', params: params, nativeCallback: callback, data: state.authRequest] }
+    void httpPost(Map params, Closure callback) { requests << [verb: 'POST', params: params, nativeCallback: callback, data: state.authRequest] }
     void http(String verb, String callback, Map params, Map data) {
         requests << [verb: verb, callback: callback, params: params, data: data,
             durableRefreshing: durable.refreshing, durableRefreshToken: durable.tokens?.refresh_token]
     }
     void respond(Map request, int status, Object body, Map headers = [:]) {
+        if (request.nativeCallback) {
+            List entries = []
+            headers.each { k, v -> (v instanceof Collection ? v : [v]).each { entries << [name: k, value: it] } }
+            request.nativeCallback(new FakeNativeResponse(status: status, headers: entries))
+            return
+        }
         invokeMethod(request.callback, [new FakeResponse(status: status, body: body, headers: headers), request.data] as Object[])
     }
     void definition(Map options, Closure body = null) { metadataCalls << ['definition', options]; if (body) dsl(body) }

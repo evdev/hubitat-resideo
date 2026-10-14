@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.2
+ * Resideo Integration for Hubitat, v0.1.3
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.2']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.3']
 }
 
 def mainPage() {
@@ -112,7 +112,7 @@ boolean debugLogging() {
 // Diagnostics deliberately use a fixed vocabulary rather than redacting arbitrary
 // bodies after the fact. Unknown events, strings and keys never reach logs/export.
 Map diagnosticLevels() {
-    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authRedirect: 'debug', authConnectionReady: 'info',
+    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authRedirect: 'debug', authCookieFallback: 'info', authConnectionReady: 'info',
      authFailure: 'warn', reauthRequired: 'warn', tokenRefreshStarted: 'debug', tokenRefreshSucceeded: 'info',
      tokenRefreshRateLimited: 'warn', requestSent: 'debug', requestCompleted: 'debug', requestFailed: 'warn',
      requestRetry: 'debug', rateLimited: 'warn', queueFull: 'warn', staleCallback: 'debug', supersededRead: 'debug',
@@ -426,7 +426,7 @@ void clearLogin(boolean clearPassword = true) {
 void authHttp(String step, String method, String url, Object body, Map extraHeaders) {
     Map c = constants()
     Map headers = ['User-Agent': c.webUA] + extraHeaders
-    if (state.loginAttempt?.cookies) headers.Cookie = state.loginAttempt.cookies.collect { k, v -> k + '=' + v }.join('; ')
+    if (state.loginAttempt?.cookies && !(step in ['exchange', 'refresh'])) headers.Cookie = state.loginAttempt.cookies.collect { k, v -> k + '=' + v }.join('; ')
     Map req = [step: step, id: randomToken(), generation: generation(), trace: nextTrace(), sentAt: now()]
     state.authRequest = req
     diagnostic('authRequest', [request: req.trace, step: step])
@@ -435,11 +435,51 @@ void authHttp(String step, String method, String url, Object body, Map extraHead
         params.body = body instanceof Map ? JsonOutput.toJson(body) : body
         params.requestContentType = extraHeaders['Content-Type'] ?: 'application/json'
     }
-    runIn(35, 'authTimeout', [data: req])
+    runIn(35, 'authTimeout', [data: [id: req.id, generation: req.generation, step: step]])
+    if (state.loginAttempt?.nativeCookies && step in ['authorize', 'loginPage', 'callback', 'resume']) {
+        // AsyncResponse's Map cannot retain duplicate Set-Cookie headers on
+        // some hubs. Run one short native request per scheduled execution;
+        // its header decorator exposes every cookie. No custom threads.
+        params.timeout = 10
+        state.authRequest = req + [wire: params, method: method]
+        runInMillis(1, 'performCookieAuth', [data: [id: req.id, generation: req.generation]])
+        return
+    }
     try {
         if (method == 'GET') asynchttpGet('authResponse', params, req)
         else asynchttpPost('authResponse', params, req)
     } catch (Exception ignored) { authFailure('Transport error during sign-in. Try browser sign-in.', step == 'refresh') }
+}
+void performCookieAuth(Map ctx) {
+    Map req = state.authRequest
+    if (!req || req.id != ctx.id || ctx.generation != generation() || !enabled()) return
+    try {
+        if (req.method == 'GET') httpGet(req.wire as Map) { resp -> handleAuthResponse(resp.getStatus() as int, '', nativeAuthHeaders(resp), req) }
+        else httpPost(req.wire as Map) { resp -> handleAuthResponse(resp.getStatus() as int, '', nativeAuthHeaders(resp), req) }
+    } catch (Exception ignored) {
+        if (state.authRequest?.id == req.id) authFailure('Transport error during sign-in. Retry or use browser sign-in.', false)
+    }
+}
+Map nativeAuthHeaders(resp) {
+    Map out = [:]
+    def headers = resp.getHeaders()
+    if (headers instanceof Map) {
+        for (entry in headers.entrySet()) if (entry.key != null) out[entry.key.toString()] = entry.value
+    } else {
+        for (header in headers) {
+            String name = header.name.toString().toLowerCase()
+            List values = asList(out[name]); values << header.value.toString(); out[name] = values
+        }
+    }
+    out
+}
+boolean useNativeCookieFallback(Map attempt) {
+    if (attempt.nativeCookies) return false
+    attempt.nativeCookies = true; attempt.cookies = [:]; attempt.loginRedirects = 0; attempt.authState = null
+    state.loginAttempt = attempt
+    diagnostic('authCookieFallback')
+    authHttp('authorize', 'GET', attempt.url as String, null, [:])
+    true
 }
 
 void authTimeout(Map req) {
@@ -448,11 +488,11 @@ void authTimeout(Map req) {
 }
 
 void authResponse(resp, Map req) {
+    handleAuthResponse(responseStatus(resp), responseText(resp), responseHeaders(resp), req)
+}
+void handleAuthResponse(int status, String text, Map headers, Map req) {
     if (req.generation != generation() || state.authRequest?.id != req.id) { diagnostic('staleCallback'); return }
     unschedule('authTimeout')
-    int status = responseStatus(resp)
-    String text = responseText(resp)
-    Map headers = responseHeaders(resp)
     String step = req.step
     diagnostic('authResponse', [request: req.trace, step: step, http: status, elapsedMs: now() - ((req.sentAt ?: now()) as long)])
     Map a = state.loginAttempt ?: [:]
@@ -473,7 +513,11 @@ void authResponse(resp, Map req) {
                 authHttp('loginPage', 'GET', c.auth + '/login?state=' + encode(a.authState), null, [:]); return
             case 'loginPage':
                 if (status in [301, 302, 303, 307, 308]) {
-                    if (!redirect || ((a.loginRedirects ?: 0) as int) >= 5) throw validationError('Resideo sign-in redirected too many times. Use browser sign-in.')
+                    if (!redirect) throw validationError('Missing sign-in redirect. Use browser sign-in.')
+                    if (((a.loginRedirects ?: 0) as int) >= 5) {
+                        if (useNativeCookieFallback(a)) return
+                        throw validationError('Resideo sign-in redirected too many times. Use browser sign-in.')
+                    }
                     String next = trustedAuthRedirect(redirect)
                     a.loginRedirects = ((a.loginRedirects ?: 0) as int) + 1
                     URI target = new URI(next)
@@ -482,6 +526,7 @@ void authResponse(resp, Map req) {
                     diagnostic('authRedirect', [step: step, route: authRoute(target.path), count: a.loginRedirects])
                     authHttp('loginPage', 'GET', next, null, [:]); return
                 }
+                if (status == 200 && !a.cookies?._csrf && useNativeCookieFallback(a)) return
                 if (status != 200 || !a.cookies?._csrf) throw validationError('Resideo login changed. Try browser sign-in.')
                 if (a.connectionCheck) {
                     diagnostic('authConnectionReady', [count: a.cookies.size(), csrf: 'present'])
@@ -523,7 +568,7 @@ void authResponse(resp, Map req) {
                         diagnostic('tokenRefreshRateLimited', [http: status, retrySeconds: retryDelay(headers)])
                         runIn(retryDelay(headers), 'refreshTokens'); return
                     }
-                    throw validationError(authenticationError(tokens))
+                    throw validationError(authenticationError(tokens, step))
                 }
                 state.tokens = [access_token: tokens.access_token,
                     refresh_token: tokens.refresh_token ?: state.tokens?.refresh_token,
@@ -560,8 +605,10 @@ String authRoute(String path) {
     path == '/login' ? 'login' : path?.startsWith('/u/login') ? 'universalLogin' : path?.startsWith('/authorize') ? 'authorize' : path == '/login/callback' ? 'callback' : 'other'
 }
 
-String authenticationError(Map error) {
+String authenticationError(Map error, String step = null) {
     String code = (error.code ?: error.error ?: error.name ?: '').toString()
+    if (code == 'invalid_grant' && step == 'exchange') return 'This sign-in result expired or was already used. Start browser sign-in again and paste the final address immediately after signing in.'
+    if (code == 'invalid_grant' && step == 'refresh') return 'Your First Alert session ended. Sign in again.'
     if (code in ['invalid_user_password', 'invalid_grant', 'invalid_credentials']) return 'Credentials or refresh token rejected. Sign in again with your First Alert account.'
     if (code.toLowerCase().contains('captcha')) return 'Resideo requires a CAPTCHA. Use browser sign-in.'
     if (code.toLowerCase().contains('mfa')) return 'Resideo requires additional verification. Use browser sign-in.'
@@ -1548,7 +1595,7 @@ String safeServiceMessage(Map body) {
 Map parseJsonMap(String text) { try { def p = new JsonSlurper().parseText(text ?: '{}'); p instanceof Map ? p : [:] } catch (Exception ignored) { [:] } }
 int responseStatus(resp) { try { (resp.getStatus() ?: 0) as int } catch (Exception ignored) { 0 } }
 String responseText(resp) {
-    try { def body = resp.getData(); if (body != null) return body.toString() } catch (Exception ignored) { }
+    try { def body = resp.getData(); if (body != null && body.toString()) return body.toString() } catch (Exception ignored) { }
     // Hubitat exposes bodies for failed HTTP responses through getErrorData.
     try { resp.getErrorData()?.toString() ?: '' } catch (Exception ignored) { '' }
 }

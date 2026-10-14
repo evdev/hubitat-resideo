@@ -45,3 +45,7 @@ Thermostat identifiers use the app instance and cloud device ID; sensor identifi
 The exact baseline and original license are recorded in the repository. Sanitized upstream fixtures are checked in under `tests/fixtures/`. `.reference/` is an ignored maintenance snapshot of source files; it is not part of deployment.
 
 `tools/build-parity.py` reads the pinned platform declarations from `.reference/` and regenerates `tests/parity.json` and `docs/parity.md`. Tests verify every declared upstream entity has a driver attribute and a populated representative projection. Update the source baseline, mapping, fixtures, and tests together when porting an upstream change.
+
+### Cookie-header fallback during sign-in
+
+Most HTTP work remains asynchronous. Some hubs flatten duplicate Set-Cookie headers in AsyncResponse, which can omit Auth0's CSRF/session cookies. If a login page lacks CSRF or enters a bounded redirect loop, setup restarts its temporary cookie session once using native HTTP for the cookie-bearing authorization, login-page, callback and resume steps. Each native request runs in its own scheduled callback with a ten-second timeout. Credential submission, token exchange, refresh and all device API requests stay asynchronous. Full native header iteration retains duplicates, the same HTTPS host guards apply, and cancellation clears temporary wire/cookie data. No extra server, runtime library or custom thread is used.

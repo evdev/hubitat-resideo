@@ -56,7 +56,7 @@ Use the link from the current attempt and finish within 15 minutes. Saving the a
 
 ## Check the sign-in connection
 
-In **Operation**, choose **Check First Alert sign-in connection (no password needed)**. This checks the authorization redirect and login-page cookies from the hub without submitting account credentials. Success means the hub can reach and parse the sign-in service; it does not verify your password or account migration. Enable optional debug logging to capture the steps and safe cookie-count/CSRF-presence diagnostics.
+In **Operation**, choose **Check First Alert sign-in connection (no password needed)**. This checks the authorization redirect and login-page cookies from the hub without submitting account credentials. If the hub's asynchronous response omits duplicate cookies, the integration retries this setup check once using bounded native HTTP so every cookie can be retained. Success means the hub can reach and parse the sign-in service; it does not verify your password or account migration. Enable optional debug logging to capture the steps and safe cookie-count/CSRF-presence diagnostics.
 
 ## Select devices
 

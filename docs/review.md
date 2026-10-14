@@ -46,3 +46,7 @@ Resideo's public client rejected the OAuth device-code grant, so the implementat
 ## Redirect handling — v0.1.2
 
 The first physical-hub connection check passed authorization and cookie decoding but received HTTP 302 on the login page. The pinned upstream follows login-page redirects; the port had disabled redirect following without reproducing that part of the flow. Login-page redirects are now followed explicitly, preserving received cookies and the final server state, with a five-hop limit and strict HTTPS/authentication-host checks. Safe diagnostics report only fixed route categories and session/CSRF presence. Two additional regression groups bring verification to **79 passing groups**.
+
+## Complete cookie transport — v0.1.3
+
+An anonymous reproduction showed that retaining only the last repeated Set-Cookie value reaches the login page without the CSRF cookie. A one-time native-header fallback now retains all cookies during the setup steps that require them. Native requests are bounded to ten seconds and individually scheduled; credential submission, token exchange/rotation and device API work remain asynchronous. Temporary wire data is excluded from scheduled job arguments and diagnostic exports and is removed on cancellation/completion. Expired browser results now have their own message. The suite has **84 passing groups**. The user's remote-admin session expired; installation and end-to-end credential verification of this follow-up remain pending reconnection.

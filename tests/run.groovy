@@ -895,12 +895,69 @@ test('Login-page redirects collect cookies and preserve the final Auth0 server s
 }
 test('Login-page redirect loops and foreign hosts fail safely without forwarding cookies') {
     def s = app(); s.testSignInConnection(); s.respond(s.requests[-1], 302, '', [Location: '/login?state=first'])
-    6.times { s.respond(s.requests[-1], 302, '', [Location: '/login?state=again']) }
+    s.state.loginAttempt.nativeCookies = true
+    6.times { s.respond(s.requests[-1], 302, '', [Location: '/login?state=again']); s.advance(1L) }
     assert !s.state.loginAttempt && s.state.lastError.contains('too many times')
     s = app(); s.testSignInConnection(); s.respond(s.requests[-1], 302, '', [Location: '/login?state=first'])
     s.respond(s.requests[-1], 302, '', [Location: 'https://other.example/login?state=private'])
     assert s.requests.size() == 2 && !s.state.loginAttempt
     rejected { s.trustedAuthRedirect('https://login.resideo.com@other.example/login') }
     rejected { s.trustedAuthRedirect('http://login.resideo.com/login') }
+}
+test('Missing duplicate cookies trigger one scheduled native bootstrap with complete headers') {
+    def s = app(); s.settings.debugEnable = true; s.testSignInConnection()
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=lost', 'Set-Cookie': 'auth0_compat=private-session; Path=/'])
+    s.respond(s.requests[-1], 200, '', ['Set-Cookie': 'did_compat=private-device; Path=/'])
+    assert s.state.loginAttempt.nativeCookies && s.jobs.any { it.handler == 'performCookieAuth' }
+    assert s.jobs.findAll { it.handler in ['performCookieAuth', 'authTimeout'] }.every { !it.data.containsKey('wire') }
+    s.advance(1L); Map root = s.requests[-1]
+    assert root.nativeCallback && root.params.timeout == 10 && root.params.followRedirects == false
+    s.respond(root, 302, '', [Location: '/login?state=complete', 'Set-Cookie': ['auth0=private-session; Path=/', 'did=private-device; Path=/']])
+    s.advance(1L); Map page = s.requests[-1]
+    assert page.params.headers.Cookie.contains('auth0=private-session') && page.params.headers.Cookie.contains('did=private-device')
+    s.respond(page, 200, '', ['Set-Cookie': ['_csrf=private-csrf; Path=/', 'did_compat=private-device; Path=/']])
+    assert s.state.authStatus == 'Connection check passed. Ready to sign in.'
+    assert !s.state.authRequest && !s.state.loginAttempt
+    assert !s.logs.join().contains('private-session') && !s.logs.join().contains('private-csrf')
+}
+test('Native cookie fallback preserves callback rotation while credential and token POSTs stay asynchronous') {
+    def s = app(); s.settings.loginEmail = 'test@example.com'; s.settings.loginPassword = 'private-password'; s.startPasswordLogin()
+    String nonce = s.state.loginAttempt.nonce
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=lost'])
+    s.respond(s.requests[-1], 200, '', [:]); s.advance(1L)
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=complete', 'Set-Cookie': ['auth0=initial; Path=/', 'did=device; Path=/']]); s.advance(1L)
+    s.respond(s.requests[-1], 200, '', ['Set-Cookie': ['_csrf=csrf; Path=/', 'did_compat=device; Path=/']])
+    Map credentials = s.requests[-1]
+    assert !credentials.nativeCallback && new JsonSlurper().parseText(credentials.params.body).password == 'private-password'
+    s.respond(credentials, 200, '<input name="wresult" value="private-form-token"><input name="wctx" value="context">'); s.advance(1L)
+    Map callback = s.requests[-1]; assert callback.nativeCallback && callback.verb == 'POST'
+    s.respond(callback, 302, '', [Location: '/authorize/resume', 'Set-Cookie': ['auth0=rotated; Path=/', 'auth0_compat=rotated; Path=/']]); s.advance(1L)
+    Map resume = s.requests[-1]; assert resume.nativeCallback && resume.params.headers.Cookie.contains('auth0=rotated')
+    s.respond(resume, 302, '', [Location: s.constants().redirect + '?code=private-code&state=' + nonce])
+    Map exchange = s.requests[-1]; assert !exchange.nativeCallback && !exchange.params.headers.Cookie
+    s.respond(exchange, 200, [access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 3600])
+    assert s.state.authStatus == 'Connected' && !s.settings.loginPassword && !s.state.loginAttempt && !s.state.authRequest
+}
+test('Native fallback does not loop or retain private wire data after cancellation') {
+    def s = app(); s.testSignInConnection(); s.respond(s.requests[-1], 302, '', [Location: '/login?state=first']); s.respond(s.requests[-1], 200, '', [:])
+    s.appButtonHandler('cancelLogin'); s.advance(1L)
+    assert s.requests.size() == 2 && !s.state.authRequest && !s.state.loginAttempt
+    s = app(); s.testSignInConnection(); s.respond(s.requests[-1], 302, '', [Location: '/login?state=first']); s.respond(s.requests[-1], 200, '', [:]); s.advance(1L)
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=second']); s.advance(1L)
+    s.respond(s.requests[-1], 200, '', [:])
+    assert !s.state.authRequest && !s.state.loginAttempt && s.state.authStatus == 'Sign-in failed'
+    assert s.state.diagnosticCounters.authCookieFallback == 1
+}
+test('Empty primary response bodies do not hide useful authentication errors') {
+    def s = app()
+    def resp = loader.loadClass('FakeResponse').newInstance(status: 400, body: '', errorDataBody: [code: 'invalid_captcha'])
+    assert s.parseJsonMap(s.responseText(resp)).code == 'invalid_captcha'
+}
+test('Expired browser results are distinguished from account credentials and revoked sessions') {
+    def s = app()
+    assert s.authenticationError([error: 'invalid_grant'], 'exchange').contains('sign-in result expired')
+    assert !s.authenticationError([error: 'invalid_grant'], 'exchange').contains('Credentials')
+    assert s.authenticationError([error: 'invalid_grant'], 'refresh').contains('session ended')
+    assert s.authenticationError([code: 'invalid_user_password'], 'credentials').contains('Credentials')
 }
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)
