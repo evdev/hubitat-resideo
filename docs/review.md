@@ -66,3 +66,7 @@ Physical-hub initialization exposed circular gate acquisition when a parent-driv
 ## Authentication versus communication status — v0.1.7
 
 A previous transport timeout was displayed as a sign-in failure despite a connected account. Authentication errors and cloud-operation warnings now use separate state and UI sections. Legacy transport errors migrate to Operation, and a successful response from the affected endpoint clears its warning. Azure and JWT-shaped tokens are redacted from service messages. Explicitly false SignalR subscription results are rejected rather than treated as connected. Existing account authentication is retained when a later browser attempt expires, with that distinction stated in its status.
+
+## Large-account bootstrap — v0.1.8
+
+Live debug capture reproduced a full 100-request queue during a 21-thermostat bootstrap. Feed activation and ordinary metadata were reading the same priority endpoint as separate request kinds. They now share queued reads, while activation arriving after a read was dispatched receives a fresh generation-scoped request. Redacted diagnostics include selected, activated and resynchronized counts. Two new regressions bring the suite to 98 passing groups, including complete readiness for all 21 fixture thermostats. A queue-full command rejection now reports the cloud warning rather than unrelated authentication state.

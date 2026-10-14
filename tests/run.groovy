@@ -1087,4 +1087,34 @@ test('SignalR explicitly false subscription completion is rejected') {
     c.parse(JsonOutput.toJson([type: 3, invocationId: '1', result: false]) + '\u001e')
     assert c.state.stage == 'backoff' && !messages(c).any { it.kind == 'streamActivated' }
 }
+test('Twenty-one thermostat bootstrap shares priority reads with feed activation') {
+    def s = ready(); List devices = (1..21).collect { 'DEVICE' + it }
+    s.settings.selectedThermostats = devices
+    s.state.discovered = devices.collectEntries { [(it): [name: 'Thermostat', locationId: 'loc', locationName: 'Home']] }
+    s.state.cache = [:]
+    def c = s.ensureChild('Resideo Connection', s.connectionId('loc'), 'Connection', [kind: 'connection', locationId: 'loc'])
+    c.startConnection(s.generation())
+    devices.each { s.refreshDevice(it, true) }
+    s.activateStream([locationId: 'loc', connectionGeneration: c.connectionGeneration()])
+    assert !(s.state.diagnosticCounters ?: [:]).queueFull
+    assert s.state.httpQueue.count { it.kind == 'activation' } == 21
+    assert !s.state.httpQueue.any { it.kind == 'priority' }
+    int cursor = 0
+    while (cursor < s.requests.size()) {
+        Map request = s.requests[cursor++]; String path = request.params.uri
+        s.respond(request, path.endsWith('/rooms') ? 404 : 200,
+            path.endsWith('/configuration') ? fixture('configuration') : path.endsWith('/priority') ? [:] : fixture('device'))
+    }
+    assert s.state.streams.loc.ready
+    assert s.diagnosticSnapshot().streams[0].activated == 21
+    assert s.diagnosticSnapshot().streams[0].resynchronized == 21
+}
+test('Activation arriving during a priority read gets a fresh generation-scoped request') {
+    def s = ready(); def c = s.ensureChild('Resideo Connection', s.connectionId('loc'), 'Connection', [kind: 'connection', locationId: 'loc'])
+    c.startConnection(s.generation()); s.enqueueRead('priority', mac, s.thermostatPath(mac, 1) + '/priority', [:])
+    s.enqueueRead('activation', mac, s.thermostatPath(mac, 1) + '/priority', [locationId: 'loc', connectionGeneration: c.connectionGeneration()])
+    assert s.requests.size() == 1 && s.state.httpQueue[0].kind == 'activation'
+    s.respond(s.requests[0], 200, [:]); assert s.requests.size() == 2
+    s.respond(s.requests[1], 200, [:]); assert s.state.streams.loc.activated
+}
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

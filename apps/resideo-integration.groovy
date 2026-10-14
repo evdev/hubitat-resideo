@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.7
+ * Resideo Integration for Hubitat, v0.1.8
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.7']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.8']
 }
 
 def mainPage() {
@@ -788,19 +788,24 @@ String thermostatPath(String mac, int v = 2) { constants().root + '/v' + v + '/d
 void enqueueRead(String kind, String mac, String path, Map context) {
     enqueueRequest([kind: kind, mac: mac, method: 'GET', path: path, context: context])
 }
+String readKind(String kind) { kind == 'activation' ? 'priority' : kind }
 void enqueueRequest(Map r) {
     if (!enabled()) return
     List queue = state.httpQueue ?: []
     Map inflight = state.inFlight ?: [:]
     if (r.method == 'GET') {
-        Map queued = queue.find { it.kind == r.kind && it.mac == r.mac && it.path == r.path }
-        if (queued) { queued.context = (queued.context ?: [:]) + (r.context ?: [:]); state.httpQueue = queue; return }
-        Map running = inflight.values().find { it.kind == r.kind && it.mac == r.mac && it.path == r.path }
+        Map queued = queue.find { readKind(it.kind as String) == readKind(r.kind as String) && it.mac == r.mac && it.path == r.path }
+        if (queued) {
+            queued.context = (queued.context ?: [:]) + (r.context ?: [:])
+            if (r.kind == 'activation') queued.kind = 'activation'
+            state.httpQueue = queue; return
+        }
+        Map running = inflight.values().find { readKind(it.kind as String) == readKind(r.kind as String) && it.mac == r.mac && it.path == r.path }
         if (running) {
             // A post-write read must not be coalesced into a pre-write response.
             boolean newBootstrap = r.context?.bootstrapGeneration != null &&
                 (r.context.bootstrapGeneration != running.context?.bootstrapGeneration || r.context.bootstrapLocation != running.context?.bootstrapLocation)
-            if (newBootstrap || (r.context?.reconcile && ((running.sentAt ?: 0L) as long) < now())) {
+            if (newBootstrap || (r.kind == 'activation' && running.kind != 'activation') || (r.context?.reconcile && ((running.sentAt ?: 0L) as long) < now())) {
                 queue << (r + [id: randomToken(), generation: generation(), retry: 0])
                 state.httpQueue = queue
             }
@@ -810,7 +815,7 @@ void enqueueRequest(Map r) {
     if (queue.size() >= 100) {
         diagnostic('queueFull', [queued: queue.size()])
         setCloudError('Request queue is full. Try again after pending work completes.')
-        if (r.kind == 'write') rejectCommand(r.context as Map, state.lastError as String)
+        if (r.kind == 'write') rejectCommand(r.context as Map, state.cloudError as String)
         return
     }
     r = r + [id: randomToken(), generation: generation(), retry: r.retry ?: 0]
@@ -1684,7 +1689,9 @@ Map diagnosticSnapshot() {
          Object aid = key == deviceMac ? null : key.toString().substring(deviceMac.length() + 1)
          [device: diagnosticDevice(deviceMac, aid), fields: p.size(), deferredFields: p.values().count { it.deferred }]
      },
-     streams: (state.streams ?: [:]).collect { loc, s -> [id: diagnosticAlias('location', loc), ready: s.ready == true, status: s.status] },
+     streams: (state.streams ?: [:]).collect { loc, s -> [id: diagnosticAlias('location', loc), ready: s.ready == true, status: s.status, selected: locationMacs(loc as String).size(),
+         activated: (s.activation ?: [:]).values().count { it == true },
+         resynchronized: locationMacs(loc as String).count { s.generation != null && (state.cache ?: [:])[it]?.lastRestBootstrap == s.generation }] },
      devices: selectedMacs().collect { mac -> [id: diagnosticDevice(mac), health: healthAttributes(mac),
          unsupportedEndpoints: (state.cache ?: [:])[mac]?.unsupported ?: [],
          sensorCount: accessories((state.cache ?: [:])[mac]?.rooms ?: [:]).count { it.accessory.AccessoryAttribute?.Type == 'IndoorAirSensor' }] }]

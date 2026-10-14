@@ -2,7 +2,7 @@
 
 ## Automated verification
 
-Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **96 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
+Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **98 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
 
 The test runner uses Groovy **2.4.21**, a Hubitat DSL/method stub, a deterministic scheduler, fake asynchronous HTTP, fake WebSocket transport, and the upstream sanitized fixtures. No account credentials or live thermostat are used.
 
@@ -38,13 +38,13 @@ Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchang
 | Check | Status |
 |---|---|
 | Compile all four scripts on the physical hub | Passed through HPM v1.9.13, 2026-10-14 |
-| HPM manages the app and all three drivers at v0.1.5 | Passed: HPM update completion, 2026-10-14 |
+| HPM manages the app and all three drivers at v0.1.7 | Passed: HPM update completion, 2026-10-14 |
 | Integration account setup page opens | Passed, 2026-10-14 |
 | v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
 | Direct email/password sign-in | Pending |
 | Browser-assisted sign-in and token persistence | Passed: token exchange and save/reopen without signing in again, 2026-10-14 |
 | Account-level thermostat discovery | Passed: authenticated accounts API returned thermostats |
-| Thermostat and room-sensor discovery / capability matching | Pending |
+| Thermostat and room-sensor discovery / capability matching | 21 selected thermostat children; shadow/configuration/priority reads succeeded; rooms unsupported (404); read-only heating-only capability observed |
 | Standard dashboard thermostat controls | Pending |
 | Rule Machine standard and custom commands | Pending |
 | Changes from First Alert and the wall thermostat reach Hubitat | Pending |
@@ -71,4 +71,4 @@ Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat beh
 
 Two browser handoffs exceeded the original 15-minute setup-attempt lifetime. Their callbacks were correctly rejected as expired; no token exchange occurred. Version 0.1.5 extends only the pending browser setup request to one hour and displays its deadline. Fresh-login parameters and Auth0’s authorization-code lifetime are unchanged. A subsequent fresh callback completed token exchange and authenticated account discovery successfully with v0.1.5.
 
-Live device initialization with v0.1.5 created the selected thermostat children and populated read-only state, configuration and priority. Room endpoints returned 404 and were marked unsupported. It also exposed circular parent/driver single-threaded gate waits. Version 0.1.6 replaces synchronous driver callbacks with native child-ID events and private outboxes; physical-hub verification of this repair is pending. No heating/cooling setting was changed during these checks.
+Live device initialization with v0.1.5 created the selected thermostat children and populated read-only state, configuration and priority. Room endpoints returned 404 and were marked unsupported. It also exposed circular parent/driver single-threaded gate waits. Version 0.1.6 replaces synchronous driver callbacks with native child-ID events and private outboxes; physical-hub verification confirmed stream events and automatic token refresh without new gate errors. The stream remained partly initialized because duplicate priority/activation requests filled the 100-request queue during the 21-device bootstrap. Version 0.1.8 shares these reads; complete physical-hub readiness is pending. No heating/cooling setting was changed during these checks.
