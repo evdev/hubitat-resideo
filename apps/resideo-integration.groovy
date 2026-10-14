@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.0
+ * Resideo Integration for Hubitat, v0.1.1
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -19,16 +19,19 @@ Map constants() {
     [base: 'https://api.ha.resideo.com', auth: 'https://login.resideo.com',
      client: 'SRmiA7CaYi1JgivDZdzzoZu4X5VBogGt', subscription: 'b60885e8a9b44680a29ea1f03452878a',
      redirect: 'com.resideo.firstalert://login.resideo.com/ios/com.resideo.firstalert/callback',
+     browserRedirect: 'https://login.resideo.com/ios/com.resideo.firstalert/callback',
      audience: 'https://resideo-prod.auth0.com/api/v2/', scope: 'openid profile email offline_access',
      authClient: 'eyJ2ZXJzaW9uIjoiMS4xNC4wIiwibmFtZSI6ImF1dGgwLWZsdXR0ZXIiLCJlbnYiOnsiY29yZSI6IjIuMTAuMCIsImlPUyI6IjI2LjEiLCJzd2lmdCI6IjUueCJ9fQ',
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.0']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.1']
 }
 
 def mainPage() {
-    dynamicPage(name: 'mainPage', title: 'Resideo / First Alert', install: true, uninstall: true) {
+    Map pageOptions = [name: 'mainPage', title: 'Resideo / First Alert', install: true, uninstall: true]
+    if (state.authRequest && state.authRequest.step != 'refresh') pageOptions.refreshInterval = 3
+    dynamicPage(pageOptions) {
         section('Account') {
             paragraph escapeHtml(state.authStatus ?: 'Sign in to your First Alert account.')
             if (state.lastError) paragraph escapeHtml(state.lastError)
@@ -37,10 +40,13 @@ def mainPage() {
             input 'signIn', 'button', title: 'Sign in with email and password'
             input 'browserSignIn', 'button', title: 'Start browser sign-in'
             if (state.browserAttempt) {
-                href url: state.browserAttempt.url, style: 'external', title: 'Open Resideo sign-in', description: 'Sign in on Resideo’s website'
-                paragraph 'On a computer, open browser Developer Tools → Network before signing in. After sign-in, copy the Location header of the final redirect to com.resideo.firstalert://… and paste the complete URL below. Cancel the prompt to open the phone app. See the installation guide for details.'
-                input 'browserRedirect', 'password', title: 'Complete redirect URL', required: false
-                input 'finishBrowser', 'button', title: 'Complete browser sign-in'
+                paragraph '1. Open First Alert sign-in below and sign in on Resideo’s website. Keep this Hubitat page open.'
+                href url: state.browserAttempt.url, style: 'external', title: 'Open First Alert sign-in', description: 'Opens the secure sign-in page in another tab'
+                paragraph '2. When sign-in finishes, copy the full web address from the browser’s address bar. A blank page or “Cannot GET” message is expected on that final page. You can copy this address like any website address.'
+                input 'browserRedirect', 'password', title: '3. Paste the final web address here', required: false
+                input 'finishBrowser', 'button', title: 'Connect my account'
+                paragraph 'Use the link from this attempt and finish within 15 minutes. If you see the First Alert sign-in form again, complete sign-in before copying the address.'
+                if (state.browserAttempt.redirectUri != constants().browserRedirect) paragraph 'This link was created by an older version. Choose Start browser sign-in again to use the simpler flow.'
             }
             input 'cancelLogin', 'button', title: 'Cancel sign-in'
         }
@@ -64,13 +70,27 @@ def mainPage() {
             paragraph escapeHtml(operationSummary())
             input 'showDiagnostics', 'button', title: 'Prepare redacted diagnostics'
             input 'clearDiagnostics', 'button', title: 'Clear diagnostic history and counters'
+            input 'testSignInConnection', 'button', title: 'Check First Alert sign-in connection (no password needed)'
             if (state.diagnostics) paragraph '<pre>' + escapeHtml(state.diagnostics) + '</pre>'
         }
     }
 }
 
 void installed() { initialize() }
-void updated() { initialize() }
+void updated() {
+    // Saving preferences must not erase a browser verifier or invalidate an
+    // asynchronous password login that is still in progress.
+    if (enabled() && signInInProgress()) { configureLogging(); scheduleLoginExpiry(); return }
+    initialize()
+}
+boolean signInInProgress() {
+    Map attempt = state.browserAttempt ?: state.loginAttempt
+    attempt && now() - ((attempt.created ?: 0L) as long) < 900000L
+}
+void scheduleLoginExpiry() {
+    Map attempt = state.browserAttempt ?: state.loginAttempt
+    if (attempt) runIn(Math.max(1, Math.ceil((900000L - (now() - (attempt.created as long))) / 1000.0d) as int), 'expireLogin')
+}
 void uninstalled() { stopIntegration(true) }
 void logsOff() {
     app.updateSetting('debugEnable', [value: 'false', type: 'bool'])
@@ -92,7 +112,7 @@ boolean debugLogging() {
 // Diagnostics deliberately use a fixed vocabulary rather than redacting arbitrary
 // bodies after the fact. Unknown events, strings and keys never reach logs/export.
 Map diagnosticLevels() {
-    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug',
+    [initialized: 'info', debugDisabled: 'info', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authConnectionReady: 'info',
      authFailure: 'warn', reauthRequired: 'warn', tokenRefreshStarted: 'debug', tokenRefreshSucceeded: 'info',
      tokenRefreshRateLimited: 'warn', requestSent: 'debug', requestCompleted: 'debug', requestFailed: 'warn',
      requestRetry: 'debug', rateLimited: 'warn', queueFull: 'warn', staleCallback: 'debug', supersededRead: 'debug',
@@ -104,7 +124,7 @@ Map diagnosticLevels() {
 }
 Map diagnosticEnums() {
     [endpoint: ['accounts', 'shadow', 'rooms', 'configuration', 'priority', 'activation', 'negotiate', 'azureNegotiate', 'write'],
-     method: ['GET', 'POST', 'PUT'], flow: ['browser', 'password'], step: ['authorize', 'loginPage', 'credentials', 'callback', 'resume', 'exchange', 'refresh'],
+     method: ['GET', 'POST', 'PUT'], flow: ['browser', 'password', 'connectionCheck'], csrf: ['present', 'missing'], step: ['authorize', 'loginPage', 'credentials', 'callback', 'resume', 'exchange', 'refresh'],
      command: ['setThermostatMode', 'setThermostatFanMode', 'setHeatingSetpoint', 'setCoolingSetpoint', 'setHold',
          'setScheduleEnabled', 'setFeelsLikeEnabled', 'setAdaptiveRecoveryEnabled', 'setEmergencyHeatEnabled',
          'setSetpointLimits', 'setFreezeProtectionLowLimit', 'setOccupancySensitivity', 'setExcludeMotion', 'setExcludeTemperature', 'setSchedule'],
@@ -257,6 +277,7 @@ void appButtonHandler(String name) {
             state.diagnostics = null; state.diagnosticEvents = []; state.diagnosticCounters = [:]
             state.diagnosticSeen = [:]; state.diagnosticWindow = null
             break
+        case 'testSignInConnection': testSignInConnection(); break
     }
 }
 
@@ -296,48 +317,55 @@ String randomToken() { UUID.randomUUID().toString().replace('-', '') + UUID.rand
 String base64url(byte[] b) { b.encodeBase64().toString().replace('+', '-').replace('/', '_').replaceAll('=+$', '') }
 String encode(Object v) { java.net.URLEncoder.encode(v.toString(), 'UTF-8') }
 String queryString(Map q) { q.collect { k, v -> encode(k) + '=' + encode(v) }.join('&') }
-Map newAuthorization() {
+Map newAuthorization(String redirectUri = constants().redirect) {
     String verifier = randomToken()
     String nonce = randomToken()
     Map c = constants()
     Map query = [state: nonce, scope: c.scope, signUpUrl: 'https://myid.resideo.com/sign-up?userType=consumer',
         client_id: c.client, code_challenge_method: 'S256', response_type: 'code', max_age: '0',
-        audience: c.audience, redirect_uri: c.redirect,
+        audience: c.audience, redirect_uri: redirectUri,
         code_challenge: base64url(MessageDigest.getInstance('SHA-256').digest(verifier.getBytes('US-ASCII'))),
         prompt: 'login', auth0Client: c.authClient]
-    [url: c.auth + '/authorize?' + queryString(query), verifier: verifier, nonce: nonce, created: now()]
+    [url: c.auth + '/authorize?' + queryString(query), verifier: verifier, nonce: nonce, created: now(), redirectUri: redirectUri]
 }
 
 void startBrowserLogin() {
     if (state.refreshing) { state.lastError = 'Wait for token refresh to complete before signing in.'; return }
     clearLogin()
-    state.browserAttempt = newAuthorization()
+    state.lastError = null
+    state.browserAttempt = newAuthorization(constants().browserRedirect as String)
     diagnostic('authStarted', [flow: 'browser'])
     state.authStatus = 'Waiting for browser sign-in'
-    runIn(900, 'expireLogin')
+    scheduleLoginExpiry()
 }
 
 void finishBrowserLogin() {
     Map attempt = state.browserAttempt
+    Map q = [:]
     String pasted = settings.browserRedirect?.toString()?.trim()
     try {
-        if (!attempt || now() - (attempt.created as long) > 900000L) throw validationError('Browser sign-in expired. Start again.')
-        Map q = parseQuery(pasted)
+        if (!attempt || now() - (attempt.created as long) >= 900000L) throw validationError('Browser sign-in expired. Start again.')
+        q = parseQuery(pasted)
         if (q.error) throw validationError('Browser sign-in was rejected. Start again.')
-        if (!q.code || q.state != attempt.nonce) throw validationError('Paste the complete redirect URL from this sign-in attempt, including code and state.')
-        exchangeCode(q.code as String, attempt.verifier as String)
+        if (!q.code) throw validationError('Sign in on First Alert first, then copy the final web address from the address bar and paste it here.')
+        if (q.state != attempt.nonce) throw validationError('This address is from a different sign-in attempt. Use the current sign-in link and paste its final address.')
+        String redirectUri = (attempt.redirectUri ?: constants().redirect) as String
+        if (!pasted.startsWith(redirectUri + '?')) throw validationError('Paste the full final First Alert web address from the browser’s address bar.')
+        state.lastError = null; state.authStatus = 'Connecting your account'
+        exchangeCode(q.code as String, attempt.verifier as String, redirectUri)
     } catch (Exception e) {
         state.lastError = validationMessage(e, 'Invalid browser redirect. Start sign-in again.')
         diagnostic('authFailure', [flow: 'browser', reason: authFailureReason(state.lastError as String)])
-        clearLogin()
+        if (!attempt || now() - (attempt.created as long) >= 900000L || q.error) clearLogin()
+        state.authStatus = state.browserAttempt ? 'Check the pasted address and try again' : state.tokens ? 'Connected; browser sign-in failed' : 'Start browser sign-in again'
     }
     app.removeSetting('browserRedirect')
 }
 
-void exchangeCode(String code, String verifier) {
+void exchangeCode(String code, String verifier, String redirectUri = constants().redirect) {
     Map c = constants()
     authHttp('exchange', 'POST', c.auth + '/oauth/token',
-        [client_id: c.client, code: code, redirect_uri: c.redirect, code_verifier: verifier, grant_type: 'authorization_code'],
+        [client_id: c.client, code: code, redirect_uri: redirectUri, code_verifier: verifier, grant_type: 'authorization_code'],
         ['Auth0-Client': c.authClient, 'Content-Type': 'application/json'])
 }
 
@@ -358,15 +386,30 @@ void startPasswordLogin() {
     if (state.refreshing) { state.lastError = 'Wait for token refresh to complete before signing in.'; return }
     if (!settings.loginEmail || !settings.loginPassword) { state.lastError = 'Enter your First Alert email and password.'; return }
     clearLogin(false)
+    state.lastError = null
     Map a = newAuthorization()
     state.loginAttempt = a + [cookies: [:]]
     state.authStatus = 'Signing in'
     diagnostic('authStarted', [flow: 'password'])
-    runIn(900, 'expireLogin')
+    scheduleLoginExpiry()
     authHttp('authorize', 'GET', a.url as String, null, [:])
 }
 
-void expireLogin() { diagnostic('authFailure', [reason: 'expired']); clearLogin(); state.lastError = 'Sign-in expired. Start again.' }
+void testSignInConnection() {
+    if (signInInProgress() || state.refreshing) { state.lastError = 'Finish or cancel the current sign-in attempt before checking the connection.'; return }
+    clearLogin()
+    state.lastError = null; state.authStatus = 'Checking First Alert sign-in connection'
+    Map a = newAuthorization()
+    state.loginAttempt = a + [cookies: [:], connectionCheck: true]
+    diagnostic('authStarted', [flow: 'connectionCheck'])
+    scheduleLoginExpiry()
+    authHttp('authorize', 'GET', a.url as String, null, [:])
+}
+void expireLogin() {
+    diagnostic('authFailure', [reason: 'expired']); clearLogin()
+    state.authStatus = state.tokens ? 'Connected' : 'Sign-in expired'
+    state.lastError = 'Sign-in expired. Start again.'
+}
 void clearLogin(boolean clearPassword = true) {
     state.browserAttempt = null
     state.loginAttempt = null
@@ -409,9 +452,12 @@ void authResponse(resp, Map req) {
     String step = req.step
     diagnostic('authResponse', [request: req.trace, step: step, http: status, elapsedMs: now() - ((req.sentAt ?: now()) as long)])
     Map a = state.loginAttempt ?: [:]
-    if (a) { a.cookies = collectCookies(a.cookies ?: [:], headers); state.loginAttempt = a }
     if (status <= 0) { authFailure('Transport error during authentication. Sign in again.', step == 'refresh'); return }
     try {
+        if (a) {
+            a.cookies = collectCookies(a.cookies ?: [:], headers); state.loginAttempt = a
+            diagnostic('authCookies', [step: step, count: a.cookies.size(), csrf: a.cookies._csrf ? 'present' : 'missing'])
+        }
         Map c = constants()
         String redirect = headerValue(headers, 'Location')
         switch (step) {
@@ -423,6 +469,11 @@ void authResponse(resp, Map req) {
                 authHttp('loginPage', 'GET', c.auth + '/login?state=' + encode(a.authState), null, [:]); return
             case 'loginPage':
                 if (status != 200 || !a.cookies?._csrf) throw validationError('Resideo login changed. Try browser sign-in.')
+                if (a.connectionCheck) {
+                    diagnostic('authConnectionReady', [count: a.cookies.size(), csrf: 'present'])
+                    clearLogin(); state.authStatus = state.tokens ? 'Connected' : 'Connection check passed. Ready to sign in.'; state.lastError = null
+                    return
+                }
                 Map credentials = [client_id: c.client, redirect_uri: c.redirect, tenant: 'resideo-prod',
                     response_type: 'code', scope: c.scope, audience: c.audience, _csrf: a.cookies._csrf,
                     state: a.authState, _intstate: 'deprecated', username: settings.loginEmail,
@@ -531,8 +582,10 @@ void refreshTokens() {
 }
 Map collectCookies(Map current, Map headers) {
     Map out = [:] + current
-    headers.findAll { k, v -> k.toString().equalsIgnoreCase('Set-Cookie') }.values().each { values ->
-        asList(values).each { raw ->
+    // Hubitat's header object can return a List from findAll even though it
+    // implements Map. Iterate values directly rather than calling .values().
+    headerValues(headers, 'Set-Cookie').each { raw ->
+        if (raw != null) {
             raw.toString().split(/,(?=\s*[^;,\s]+=)/).each { cookie ->
                 String pair = cookie.trim().split(';', 2)[0]
                 String[] p = pair.split('=', 2)
@@ -767,7 +820,7 @@ void recordUnsupported(Map r) {
 }
 
 // -- Discovery, child devices, polling -------------------------------------
-List asList(Object value) { value == null ? [] : value instanceof Collection ? new ArrayList(value) : [value] }
+List asList(Object value) { value == null ? [] : value instanceof Collection ? new ArrayList(value) : value instanceof Object[] ? value.toList() : [value] }
 List selectedMacs() { asList(settings.selectedThermostats).collect { it.toString() } }
 String deviceId(String kind, String mac, Object accessory = null) {
     'resideo-' + app.id + '-' + kind + '-' + mac + (accessory != null ? '-' + accessory : '')
@@ -1471,6 +1524,27 @@ String safeServiceMessage(Map body) {
 }
 Map parseJsonMap(String text) { try { def p = new JsonSlurper().parseText(text ?: '{}'); p instanceof Map ? p : [:] } catch (Exception ignored) { [:] } }
 int responseStatus(resp) { try { (resp.getStatus() ?: 0) as int } catch (Exception ignored) { 0 } }
-String responseText(resp) { try { resp.getData()?.toString() ?: '' } catch (Exception ignored) { '' } }
-Map responseHeaders(resp) { try { def h = resp.getHeaders(); h instanceof Map ? h : [:] } catch (Exception ignored) { [:] } }
-String headerValue(Map headers, String name) { Object v = headers.find { k, val -> k.toString().equalsIgnoreCase(name) }?.value; v instanceof Collection ? (v ? v[0]?.toString() : null) : v?.toString() }
+String responseText(resp) {
+    try { def body = resp.getData(); if (body != null) return body.toString() } catch (Exception ignored) { }
+    // Hubitat exposes bodies for failed HTTP responses through getErrorData.
+    try { resp.getErrorData()?.toString() ?: '' } catch (Exception ignored) { '' }
+}
+Map responseHeaders(resp) {
+    Map out = [:]
+    try {
+        def headers = resp.getHeaders()
+        if (headers instanceof Map) for (entry in headers.entrySet()) {
+            if (entry.key != null) out[entry.key.toString()] = entry.value
+        }
+    }
+    catch (Exception ignored) { }
+    out
+}
+List headerValues(Map headers, String name) {
+    List out = []
+    for (entry in headers.entrySet()) {
+        if (entry.key != null && entry.key.toString().equalsIgnoreCase(name)) out.addAll(asList(entry.value))
+    }
+    out
+}
+String headerValue(Map headers, String name) { List values = headerValues(headers, name); values ? values[0]?.toString() : null }

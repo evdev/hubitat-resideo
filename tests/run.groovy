@@ -48,10 +48,10 @@ test('PKCE has independent state, verifier, and a SHA-256 challenge') {
 }
 test('Browser sign-in validates state and rejects incomplete redirects') {
     def s = app(); s.startBrowserLogin()
-    s.settings.browserRedirect = 'com.resideo.firstalert://callback?code=abc&state=wrong'
+    s.settings.browserRedirect = s.constants().browserRedirect + '?code=abc&state=wrong'
     s.finishBrowserLogin(); assert !s.requests && !s.settings.browserRedirect
     s.startBrowserLogin(); String nonce = s.state.browserAttempt.nonce
-    s.settings.browserRedirect = 'com.resideo.firstalert://callback?code=a%2Bb&state=' + nonce
+    s.settings.browserRedirect = s.constants().browserRedirect + '?code=a%2Bb&state=' + nonce
     s.finishBrowserLogin()
     assert s.requests.size() == 1
     Map body = new JsonSlurper().parseText(s.requests[0].params.body)
@@ -792,5 +792,94 @@ test('HPM installs exactly the app and three required drivers with matching defi
     assert manifest.licenseFile == prefix + 'LICENSE'
     assert repository.packages.size() == 1
     assert repository.packages[0].location == 'https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json'
+}
+test('Cookie processing handles Hubitat header wrappers and folded duplicate cookies') {
+    def s = app()
+    def headers = loader.loadClass('FakeHubitatHeaders').newInstance()
+    headers.putAll(['sEt-CoOkIe': 'session=one; Expires=Wed, 21 Oct 2026 07:28:00 GMT; Path=/, _csrf=csrf-secret; Path=/; Secure, auth0=a=b; Path=/', Location: '/login?state=private-state'])
+    assert headers.findAll { k, v -> true } instanceof List
+    Map cookies = s.collectCookies([retained: 'old'], headers)
+    assert cookies == [retained: 'old', session: 'one', _csrf: 'csrf-secret', auth0: 'a=b']
+    def resp = loader.loadClass('FakeResponse').newInstance(headers: headers, body: '')
+    Map normalized = s.responseHeaders(resp)
+    assert !(normalized.findAll { k, v -> true } instanceof List)
+    assert s.headerValue(normalized, 'location') == '/login?state=private-state'
+    assert s.collectCookies([:], ['Set-Cookie': ['one=1; Path=/', '_csrf=2; Path=/'] as String[]])._csrf == '2'
+    assert s.collectCookies([:], ['Set-Cookie': null]) == [:]
+}
+test('Failed asynchronous HTTP bodies are read through the Hubitat error accessor') {
+    def s = app(); s.settings.loginEmail = 'test@example.com'; s.settings.loginPassword = 'password-secret'; s.startPasswordLogin()
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=state'])
+    s.respond(s.requests[-1], 200, '', ['Set-Cookie': '_csrf=csrf-secret; Path=/'])
+    Map request = s.requests[-1]
+    def resp = loader.loadClass('FakeResponse').newInstance(status: 400, body: [code: 'invalid_captcha'], errorBodyOnly: true)
+    s.authResponse(resp, request.data)
+    assert s.state.lastError.contains('CAPTCHA') && !s.settings.loginPassword && !s.state.authRequest
+    assert !s.logs.join().contains('password-secret') && !s.logs.join().contains('csrf-secret')
+}
+test('Cookie parsing errors terminate sign-in cleanly instead of leaving a stuck request') {
+    def s = app(); s.settings.loginEmail = 'test@example.com'; s.settings.loginPassword = 'password-secret'; s.startPasswordLogin()
+    // A deliberately unparseable cookie simulates unexpected transport metadata.
+    Map request = s.requests[-1]
+    s.respond(request, 302, '', ['Set-Cookie': loader.loadClass('FakeBadCookie').newInstance(), Location: '/login?state=state'])
+    assert !s.state.authRequest && !s.state.loginAttempt && !s.settings.loginPassword
+    assert s.state.authStatus == 'Sign-in failed'
+}
+test('Connection self-check verifies redirect and CSRF without submitting credentials') {
+    def s = app(); s.settings.debugEnable = true; s.testSignInConnection()
+    def headers = loader.loadClass('FakeHubitatHeaders').newInstance()
+    headers.putAll([Location: '/login?state=private-state', 'Set-Cookie': ['session=private-cookie; Path=/']])
+    s.respond(s.requests[-1], 302, '', headers)
+    s.respond(s.requests[-1], 200, '<html/>', ['Set-Cookie': '_csrf=private-csrf; Path=/'])
+    assert s.state.authStatus == 'Connection check passed. Ready to sign in.'
+    assert s.requests.size() == 2 && s.requests.every { it.verb == 'GET' }
+    assert !s.state.authRequest && !s.state.loginAttempt
+    assert s.state.diagnosticEvents.any { it.event == 'authConnectionReady' && it.csrf == 'present' }
+    assert !s.logs.join().contains('private-cookie') && !s.logs.join().contains('private-csrf')
+}
+test('Browser authorization and exchange use the same registered HTTPS callback') {
+    def s = app(); s.startBrowserLogin(); Map attempt = s.state.browserAttempt
+    assert s.parseQuery(attempt.url).redirect_uri == s.constants().browserRedirect
+    s.settings.browserRedirect = attempt.redirectUri + '?code=private-code&state=' + attempt.nonce
+    s.finishBrowserLogin()
+    Map body = new JsonSlurper().parseText(s.requests[-1].params.body)
+    assert body.redirect_uri == attempt.redirectUri && body.code_verifier == attempt.verifier
+    assert !s.settings.browserRedirect
+    s.respond(s.requests[-1], 200, [access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 3600])
+    assert s.state.authStatus == 'Connected' && s.requests[-1].params.uri.endsWith('/accounts')
+}
+test('Browser paste mistakes retain the current attempt and accept a corrected address') {
+    def s = app(); s.startBrowserLogin(); String nonce = s.state.browserAttempt.nonce
+    ['https://login.resideo.com/login?state=wrong', s.constants().browserRedirect + '?code=old&state=old', s.constants().browserRedirect + '?code=one&code=two&state=' + nonce, 'https://other.example/?code=code&state=' + nonce].each { value ->
+        s.settings.browserRedirect = value; s.finishBrowserLogin()
+        assert s.state.browserAttempt.nonce == nonce && !s.requests && !s.settings.browserRedirect
+    }
+    s.settings.browserRedirect = s.constants().browserRedirect + '?code=correct&state=' + nonce; s.finishBrowserLogin()
+    assert s.requests.size() == 1 && !s.state.lastError
+}
+test('Saving the app preserves browser PKCE and in-flight password login callbacks') {
+    def s = app(); s.startBrowserLogin(); Map attempt = s.deepCopy(s.state.browserAttempt); long gen = s.generation()
+    s.advance(10000L); s.updated()
+    assert s.state.browserAttempt == attempt && s.generation() == gen
+    assert s.jobs.find { it.handler == 'expireLogin' }.at == (attempt.created as long) + 900000L
+    s = app(); s.settings.loginEmail = 'test@example.com'; s.settings.loginPassword = 'private-password'; s.startPasswordLogin()
+    Map request = s.requests[-1]; gen = s.generation(); s.updated()
+    assert s.state.authRequest.id == request.data.id && s.generation() == gen && s.settings.loginPassword == 'private-password'
+    s.respond(request, 302, '', [Location: '/login?state=state'])
+    assert s.requests.size() == 2 && s.requests[-1].verb == 'GET'
+}
+test('Expired and disabled sign-ins clear temporary data and report a truthful status') {
+    def s = app(); s.startBrowserLogin(); s.advance(900000L)
+    assert !s.state.browserAttempt && s.state.authStatus == 'Sign-in expired'
+    s.startBrowserLogin(); s.settings.integrationEnabled = false; s.updated()
+    assert !s.state.browserAttempt && !s.state.authRequest
+}
+test('Guided browser UI avoids technical tools and refreshes only during HTTP sign-in') {
+    def s = app(); s.startBrowserLogin(); Map page = s.mainPage()
+    List paragraphs = s.metadataCalls.findAll { it[0] == 'paragraph' }.collect { it[1].join() }
+    assert paragraphs.any { it.contains('address bar') } && !paragraphs.any { it.contains('Developer Tools') || it.contains('Location header') }
+    assert !page.refreshInterval
+    s.settings.browserRedirect = s.constants().browserRedirect + '?code=code&state=' + s.state.browserAttempt.nonce; s.finishBrowserLogin()
+    assert s.mainPage().refreshInterval == 3
 }
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

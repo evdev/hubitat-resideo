@@ -4,7 +4,9 @@
 
 - **Credentials rejected:** verify that the account and thermostat are present in First Alert, rather than the older Resideo or Total Connect Comfort app.
 - **CAPTCHA / MFA / blocked automated login:** select browser sign-in and complete verification on Resideo's website.
-- **Invalid browser redirect:** paste the full URL including both `code` and `state` from the current attempt. Restart if expired. Do not reuse a redirect from another attempt.
+- **Check the pasted address:** finish signing in on First Alert, then copy the entire final web address from the address bar and paste it into the Hubitat app. The final blank/error page is expected. A mistaken paste preserves the current attempt; a result from another attempt is rejected. Restart only if the attempt expired.
+- **Connection check:** run **Check First Alert sign-in connection (no password needed)** under Operation. This verifies the redirect and login-page cookie handling without testing account credentials.
+- **Older v0.1.0 cookie exception:** update through HPM to v0.1.1 or newer. This fixes the `ArrayList.values()` exception that stopped authentication before credential submission.
 - **Reauthentication required:** sign in again. This includes token revocation, a password change, and an ambiguous refresh timeout. The integration avoids repeatedly reusing a possibly rotated token.
 - **No thermostats discovered:** the account endpoint may contain other product classes. This integration selects thermostat identities only.
 

@@ -2,7 +2,7 @@
 
 ## Automated verification
 
-Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **68 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
+Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **77 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
 
 The test runner uses Groovy **2.4.21**, a Hubitat DSL/method stub, a deterministic scheduler, fake asynchronous HTTP, fake WebSocket transport, and the upstream sanitized fixtures. No account credentials or live thermostat are used.
 
@@ -11,6 +11,7 @@ Coverage includes:
 - Compilation of the app and all three drivers; serialized execution metadata.
 - HPM manifest contract: all four required components, primary app, OAuth disabled, stable unique IDs, matching names/namespaces, pinned source version and repository URL.
 - Password and browser authentication, PKCE state/challenge, cookie/form/redirect handling, CAPTCHA/MFA messages, token rotation, and ambiguous refresh timeout.
+- Hubitat header-wrapper regression, folded/array cookies, failed-response body access, cookie-error cleanup, password-free connection check, HTTPS callback consistency, corrected browser pastes, preserving attempts across saves, expiry, and guided setup refresh behavior.
 - Discovery, renamed labels, stable sensor identity, orphan retention, and optional endpoint failures.
 - All 79 pinned upstream platform entities, driver declarations, sparse hardware, and complete representative projections.
 - Unit conversion, outdoor country units, supported modes, holds, bounds, deadband, complete advanced-setting bodies, and pending full-body overrides.

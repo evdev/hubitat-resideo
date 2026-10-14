@@ -50,9 +50,23 @@ class FakeResponse {
     int status
     Object body
     Map headers = [:]
+    boolean errorBodyOnly = false
     int getStatus() { status }
-    String getData() { body instanceof String ? body : JsonOutput.toJson(body) }
+    String getData() { if (errorBodyOnly) throw new Exception('Body available through getErrorData'); body instanceof String ? body : JsonOutput.toJson(body) }
+    String getErrorData() { body instanceof String ? body : JsonOutput.toJson(body) }
     Map getHeaders() { headers }
+}
+// Models the header-wrapper behavior seen on the physical hub: its findAll
+// returns entries as a list. Cookie processing must not depend on .values().
+class FakeHubitatHeaders extends LinkedHashMap {
+    Object findAll(Closure predicate) {
+        List found = []
+        each { k, v -> if (predicate(k, v)) found << [key: k, value: v] }
+        found
+    }
+}
+class FakeBadCookie {
+    String toString() { throw new Exception('Malformed cookie metadata') }
 }
 class FakeAtomicState {
     Map durable

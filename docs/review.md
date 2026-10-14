@@ -34,3 +34,11 @@ Tests inject credentials, cookies, authorization codes, token-bearing URLs, raw 
 ## HPM packaging and physical-hub installation
 
 Added a package manifest for the primary app and three required drivers, plus an optional custom repository listing. Component IDs are stable, OAuth is disabled, and source URLs are pinned to the version tag. The HPM contract check expanded the suite to **68 passing groups**. On 2026-10-14, HPM v1.9.13 successfully installed v0.1.0 on the user-provided hub and recorded all four compiled components. The account setup page opened; account and hardware acceptance checks remain in progress.
+
+## Authentication repair — v0.1.1
+
+The hub logs revealed `java.util.ArrayList.values()` at cookie collection immediately after a successful authorization redirect. The cookie parser depended on the returned type of `headers.findAll`, which did not match the workstation stub. Header normalization and direct entry/value iteration now remove that dependency, and cookie parsing sits inside the authentication failure handler. Error response bodies also fall back to Hubitat's `getErrorData` accessor so CAPTCHA/MFA/credential errors remain distinguishable.
+
+Browser sign-in now uses the corresponding registered HTTPS callback. A public authorization request confirmed that Resideo accepts this callback and redirects to sign-in; the callback page itself returns the expected 404 for dummy values. Users can copy the final address directly from the address bar instead of using Developer Tools. Authorization and exchange retain the same callback URI, state and PKCE verifier. Mistaken pastes preserve the current attempt, and saving preferences no longer destroys an active attempt or invalidates in-flight password-login callbacks.
+
+Resideo's public client rejected the OAuth device-code grant, so the implementation does not offer that unsupported flow. A password-free connection check exercises the redirect and login-page cookies on the hub. The expanded suite has **77 passing groups** under Groovy 2.4.21; live account acceptance still requires a fresh user sign-in.

@@ -45,14 +45,18 @@ The password is used only by Resideo's sign-in flow and is cleared after complet
 
 ## Browser-assisted sign-in
 
-1. Select **Start browser sign-in**, then open **Open Resideo sign-in** on a computer.
-2. Before completing login, open browser Developer Tools → **Network**. Enable **Preserve log** if the browser offers it.
-3. Sign in on Resideo's website, completing any CAPTCHA or additional verification there.
-4. The final redirect targets `com.resideo.firstalert://…`. Cancel any prompt to launch an app.
-5. In the Network panel, locate the final redirect response from Resideo and copy its full **Location** response header. It contains both `code` and `state` query parameters.
-6. Paste that complete URL into **Complete redirect URL** in the Hubitat app and select **Complete browser sign-in**.
+1. Choose **Start browser sign-in** in the integration, then **Open First Alert sign-in**. Keep the Hubitat page open.
+2. Sign in on Resideo's website, completing any verification it requests.
+3. After sign-in, the browser reaches a blank or error page at `https://login.resideo.com/ios/com.resideo.firstalert/callback`. This is expected. Copy the **entire address from the browser's address bar** (Ctrl+L then Ctrl+C on Windows/Linux, or Cmd+L then Cmd+C on macOS).
+4. Return to Hubitat, paste it into **3. Paste the final web address here**, and choose **Connect my account**.
 
-If the custom URL is visible in the browser, copying it directly also works. The code is short-lived and belongs to the specific attempt. The app rejects a missing or mismatched state and expires unfinished attempts after 15 minutes. Start again if necessary. Do not share the redirect or save it in diagnostics.
+No Developer Tools, Network panel, phone-app launch, hosted callback, or browser extension is required. If you still see the sign-in form, finish signing in before copying the address. The copied address is a private, short-lived sign-in result; do not share it or add it to diagnostics.
+
+Use the link from the current attempt and finish within 15 minutes. Saving the app preserves an active attempt. A mistaken paste can be corrected without restarting; an expired attempt needs a new sign-in link. The integration validates the result's state and exact callback address, then exchanges it on the hub using the same callback and PKCE verifier.
+
+## Check the sign-in connection
+
+In **Operation**, choose **Check First Alert sign-in connection (no password needed)**. This checks the authorization redirect and login-page cookies from the hub without submitting account credentials. Success means the hub can reach and parse the sign-in service; it does not verify your password or account migration. Enable optional debug logging to capture the steps and safe cookie-count/CSRF-presence diagnostics.
 
 ## Select devices
 

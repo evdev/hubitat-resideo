@@ -1,4 +1,4 @@
-/* Resideo SignalR connection for Hubitat, v0.1.0. MIT; see LICENSE.upstream.
+/* Resideo SignalR connection for Hubitat, v0.1.1. MIT; see LICENSE.upstream.
  * Protocol adapted from sfcodes/ha-resideo 0e2947b (c) 2026 Semyon Fishman.
  */
 import groovy.json.JsonOutput
