@@ -9,7 +9,22 @@
 
 No inbound port, Hubitat OAuth callback, developer.honeywellhome.com account, bridge service, or hosted endpoint is needed. Firmware 2.2.9 introduced the serialized-execution and redirect-control features used here, but this candidate does not yet have a tested minimum firmware or hardware matrix. Validate on an up-to-date hub first.
 
-## Add code
+## Install with Hubitat Package Manager (recommended)
+
+The package includes the integration app and all three required drivers. HPM downloads versioned source files so all four components are installed from the same revision.
+
+1. Open **Hubitat Package Manager → Install → From a URL**.
+2. Enter `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json` and choose **Next**.
+3. Review the package and MIT license, leave **Configure the installed package after installation completes** enabled, and finish installation.
+4. HPM opens **Resideo Integration**. Authenticate using one of the methods below, then select your thermostats.
+
+To make the package available when browsing custom repositories, use **HPM → Package Manager Settings → Add a Custom Repository** with `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/repository.json`. Listing in the community's global catalog is a separate step and is not required for URL installation.
+
+These URLs must be publicly accessible to the hub. A private GitHub repository is not downloadable by HPM's normal URL installer. No GitHub token is embedded in the package URLs.
+
+For HPM-managed installations, update or repair through HPM and then open the integration and select **Done**. Do not manually replace or remove HPM-managed code.
+
+## Add code manually
 
 1. Open the hub's local administration interface.
 2. Under **Developer Tools → Drivers Code**, choose **New Driver**, paste `drivers/resideo-connection.groovy`, and save.

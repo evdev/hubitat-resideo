@@ -770,4 +770,27 @@ test('First debug activity starts automatic expiry and diagnostic history can be
         assert d.state.debugUntil == d.now() + 1800000L && d.jobs.any { it.handler == 'logsOff' }
     }
 }
+test('HPM installs exactly the app and three required drivers with matching definitions and versions') {
+    Map manifest = new JsonSlurper().parse(new File('packageManifest.json'))
+    Map repository = new JsonSlurper().parse(new File('repository.json'))
+    assert manifest.version == app().constants().version
+    assert manifest.apps.size() == 1 && manifest.drivers.size() == 3
+    assert manifest.apps[0].primary == true && manifest.apps[0].oauth == false
+    List components = manifest.apps + manifest.drivers
+    assert components*.id.unique().size() == 4
+    String prefix = 'https://raw.githubusercontent.com/evdev/hubitat-resideo/v' + manifest.version + '/'
+    Set paths = [] as Set
+    components.each { item ->
+        assert item.required == true && item.location.startsWith(prefix)
+        java.util.UUID.fromString(item.id)
+        String path = item.location.substring(prefix.length()); paths << path
+        def script = load(path)
+        Map definition = script.metadataCalls.find { it[0] == 'definition' }[1]
+        assert definition.name == item.name && definition.namespace == item.namespace
+    }
+    assert paths == ['apps/resideo-integration.groovy', 'drivers/resideo-connection.groovy', 'drivers/resideo-thermostat.groovy', 'drivers/resideo-room-sensor.groovy'] as Set
+    assert manifest.licenseFile == prefix + 'LICENSE'
+    assert repository.packages.size() == 1
+    assert repository.packages[0].location == 'https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json'
+}
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

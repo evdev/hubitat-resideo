@@ -1,0 +1,12 @@
+{
+  "author": "Ephrayim (evdev)",
+  "gitHubUrl": "https://github.com/evdev/hubitat-resideo",
+  "packages": [
+    {
+      "name": "Resideo / First Alert Integration",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json",
+      "description": "First Alert thermostat and room-sensor integration running directly on Hubitat, with cloud authentication, push updates and polling fallback."
+    }
+  ]
+}

@@ -6,7 +6,7 @@ Native Hubitat app and drivers for thermostats registered in the **First Alert**
 
 ## Install
 
-Follow [INSTALL.md](INSTALL.md): add the three files under `drivers/` to Drivers Code, add `apps/resideo-integration.groovy` to Apps Code, then install **Resideo Integration** as a user app. The app creates the device children.
+Follow [INSTALL.md](INSTALL.md). In **Hubitat Package Manager → Install → From a URL**, enter `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json`. HPM installs the app and all three drivers and can open the account setup page. The app creates the device children after authentication and selection. Manual installation is also documented.
 
 ## Included
 
@@ -26,6 +26,8 @@ The [parity matrix](docs/parity.md) maps all 79 entities exposed by the pinned H
 
 | File | Install location / purpose |
 |---|---|
+| `packageManifest.json` | HPM package with one app and three required drivers |
+| `repository.json` | Optional HPM custom repository listing |
 | `apps/resideo-integration.groovy` | Apps Code: account, REST client, device state, and lifecycle |
 | `drivers/resideo-connection.groovy` | Drivers Code: SignalR connection |
 | `drivers/resideo-thermostat.groovy` | Drivers Code: thermostat interface |
@@ -50,4 +52,4 @@ Adapted from [sfcodes/ha-resideo](https://github.com/sfcodes/ha-resideo), revisi
 
 This port uses the same unofficial consumer API. A future Resideo change may require updated constants, authentication, or protocol handling. Devices on the older Resideo/Lyric or Total Connect Comfort services use other APIs. Vacation and timed holds can be reported but cannot be started here; edit schedules and other read-only settings in First Alert.
 
-Source, tests, and guides are available in [evdev/hubitat-resideo](https://github.com/evdev/hubitat-resideo). Hubitat Package Manager distribution is not configured.
+Source, tests, and guides are available in [evdev/hubitat-resideo](https://github.com/evdev/hubitat-resideo). HPM URL installation and a custom repository listing are provided. Community catalog registration is not configured.
