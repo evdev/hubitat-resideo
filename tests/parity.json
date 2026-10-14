@@ -1,0 +1,957 @@
+[
+  {
+    "platform": "climate",
+    "scope": "thermostat",
+    "key": "thermostat",
+    "attributes": [
+      "temperature",
+      "humidity",
+      "thermostatMode",
+      "thermostatFanMode",
+      "thermostatOperatingState",
+      "heatingSetpoint",
+      "coolingSetpoint",
+      "holdStatus"
+    ],
+    "command": "standard Thermostat commands; setHold; resumeSchedule",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported values; configured supported modes/limits",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "indoor_temperature",
+    "attributes": [
+      "temperature"
+    ],
+    "command": "\u2014",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "outdoor_temperature",
+    "attributes": [
+      "outdoorTemperature"
+    ],
+    "command": "\u2014",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "indoor_humidity",
+    "attributes": [
+      "humidity"
+    ],
+    "command": "\u2014",
+    "units": "%",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "outdoor_humidity",
+    "attributes": [
+      "outdoorHumidity"
+    ],
+    "command": "\u2014",
+    "units": "%",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "co2",
+    "attributes": [
+      "carbonDioxide"
+    ],
+    "command": "\u2014",
+    "units": "ppm",
+    "availability": "_co2(d) is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "tvoc",
+    "attributes": [
+      "voc"
+    ],
+    "command": "\u2014",
+    "units": "upstream unspecified",
+    "availability": "_tvoc(d) is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "heat_setpoint",
+    "attributes": [
+      "heatingSetpoint"
+    ],
+    "command": "\u2014",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "cool_setpoint",
+    "attributes": [
+      "coolingSetpoint"
+    ],
+    "command": "\u2014",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "setpoint_status",
+    "attributes": [
+      "holdStatus"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "equipment_status",
+    "attributes": [
+      "equipmentStatus"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "demand",
+    "attributes": [
+      "demand"
+    ],
+    "command": "\u2014",
+    "units": "%",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "current_stage",
+    "attributes": [
+      "currentStage"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "air_quality",
+    "attributes": [
+      "airQuality"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "co2_quality",
+    "attributes": [
+      "co2Quality"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "voc_quality",
+    "attributes": [
+      "vocQuality"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "humidity_quality",
+    "attributes": [
+      "humidityQuality"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "schedule_period",
+    "attributes": [
+      "schedulePeriod"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "backlight",
+    "attributes": [
+      "backlight"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "priority_type",
+    "attributes": [
+      "priorityType"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "air_filter_remaining",
+    "attributes": [
+      "airFilterRemaining"
+    ],
+    "command": "\u2014",
+    "units": "days",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "firmware_version",
+    "attributes": [
+      "firmwareVersion"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "fault_count",
+    "attributes": [
+      "faultCount"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "signal_strength",
+    "attributes": [
+      "signalStrength"
+    ],
+    "command": "\u2014",
+    "units": "dBm",
+    "availability": "d.thermostat.signal_strength is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "heat_cool_mode",
+    "attributes": [
+      "heatCoolMode"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.heat_cool_mode is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "fan_reason",
+    "attributes": [
+      "fanReason"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "demand_response",
+    "attributes": [
+      "demandResponse"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.demand_response_state is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "schedule_day",
+    "attributes": [
+      "scheduleDay"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.schedule_day is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "schedule_type",
+    "attributes": [
+      "scheduleType"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.schedule_type is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "adaptive_recovery_mode",
+    "attributes": [
+      "adaptiveRecoveryMode"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.active_adaptive_recovery_mode is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "ventilation_timer",
+    "attributes": [
+      "ventilationTimer"
+    ],
+    "command": "\u2014",
+    "units": "minutes",
+    "availability": "d.thermostat.ventilation_timer is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "ventilation_boost_timer",
+    "attributes": [
+      "ventilationBoostTimer"
+    ],
+    "command": "\u2014",
+    "units": "minutes",
+    "availability": "d.thermostat.ventilation_boost_timer is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "language",
+    "attributes": [
+      "language"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.current_language is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "firmware_status",
+    "attributes": [
+      "firmwareStatus"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.thermostat.firmware_status is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "registered",
+    "attributes": [
+      "registered"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "dt_util.parse_datetime(d.thermostat.registration_date or '') is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "firmware_updated",
+    "attributes": [
+      "firmwareUpdated"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "dt_util.parse_datetime(d.thermostat.firmware_last_updated or '') is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "heating_system",
+    "attributes": [
+      "heatingSystem"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.configuration.heating_system is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "heating_stages",
+    "attributes": [
+      "heatingStages"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.configuration.heating_stages is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "cooling_system",
+    "attributes": [
+      "coolingSystem"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.configuration.cooling_system is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "cooling_stages",
+    "attributes": [
+      "coolingStages"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.configuration.cooling_stages is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "temperature_units",
+    "attributes": [
+      "temperatureUnits"
+    ],
+    "command": "\u2014",
+    "units": "F / C metadata",
+    "availability": "d.configuration.temperature_units is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "matter_status",
+    "attributes": [
+      "matterStatus"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.configuration.matter_commissioning_status is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "thermostat",
+    "key": "priority_status",
+    "attributes": [
+      "priorityStatus"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "d.priority.priority_status is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "temperature",
+    "attributes": [
+      "temperature"
+    ],
+    "command": "\u2014",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "a.indoor_temperature is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "humidity",
+    "attributes": [
+      "humidity"
+    ],
+    "command": "\u2014",
+    "units": "%",
+    "availability": "a.indoor_humidity is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "temperature_actual",
+    "attributes": [
+      "temperatureActual"
+    ],
+    "command": "\u2014",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "a.temperature_actual is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "co2",
+    "attributes": [
+      "carbonDioxide"
+    ],
+    "command": "\u2014",
+    "units": "ppm",
+    "availability": "a.co2 is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "voc",
+    "attributes": [
+      "voc"
+    ],
+    "command": "\u2014",
+    "units": "upstream unspecified",
+    "availability": "a.tvoc is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "battery_status",
+    "attributes": [
+      "batteryStatus"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "a.battery_status is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "signal_strength",
+    "attributes": [
+      "signalStrength"
+    ],
+    "command": "\u2014",
+    "units": "dBm",
+    "availability": "a.rssi is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "status",
+    "attributes": [
+      "status"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "a.status is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "sensor",
+    "scope": "sensor",
+    "key": "occupancy_timeout",
+    "attributes": [
+      "occupancyTimeout"
+    ],
+    "command": "\u2014",
+    "units": "seconds",
+    "availability": "a.occupancy_timeout is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "motion",
+    "attributes": [
+      "motion"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "_ta(d) is not None and _ta(d).motion is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "occupancy",
+    "attributes": [
+      "occupancy"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "_ta(d) is not None and _ta(d).occupancy is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "online",
+    "attributes": [
+      "online"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "fan_running",
+    "attributes": [
+      "fanRunning"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "circulation_fan",
+    "attributes": [
+      "circulationFan"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "adaptive_recovery_active",
+    "attributes": [
+      "adaptiveRecoveryActive"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "vacation_hold",
+    "attributes": [
+      "vacationHold"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "air_filter",
+    "attributes": [
+      "airFilter"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "fault",
+    "attributes": [
+      "fault"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "freeze_protection",
+    "attributes": [
+      "freezeProtection"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "bool(d.configuration.reported)",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "freeze_protection_configured",
+    "attributes": [
+      "freezeProtectionConfigured"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "bool(d.configuration.reported)",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "away_mode",
+    "attributes": [
+      "awayMode"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "bool(d.configuration.reported)",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "thermostat",
+    "key": "commercial",
+    "attributes": [
+      "commercial"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "bool(d.configuration.reported)",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "sensor",
+    "key": "motion",
+    "attributes": [
+      "motion"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "a.motion is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "binary_sensor",
+    "scope": "sensor",
+    "key": "occupancy",
+    "attributes": [
+      "occupancy"
+    ],
+    "command": "\u2014",
+    "units": "\u2014",
+    "availability": "a.occupancy is not None",
+    "write": "read-only"
+  },
+  {
+    "platform": "switch",
+    "scope": "thermostat",
+    "key": "feels_like",
+    "attributes": [
+      "feelsLikeEnabled"
+    ],
+    "command": "setFeelsLikeEnabled",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "switch",
+    "scope": "thermostat",
+    "key": "adaptive_recovery",
+    "attributes": [
+      "adaptiveRecoveryEnabled"
+    ],
+    "command": "setAdaptiveRecoveryEnabled",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "switch",
+    "scope": "thermostat",
+    "key": "schedule",
+    "attributes": [
+      "scheduleEnabled"
+    ],
+    "command": "setScheduleEnabled",
+    "units": "\u2014",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "switch",
+    "scope": "thermostat",
+    "key": "emergency_heat",
+    "attributes": [
+      "emergencyHeatEnabled"
+    ],
+    "command": "setEmergencyHeatEnabled",
+    "units": "\u2014",
+    "availability": "SYSTEM_SWITCH_EMERGENCY_HEAT in (d.configuration.system_switch_capabilities or [])",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "switch",
+    "scope": "sensor",
+    "key": "exclude_motion",
+    "attributes": [
+      "excludeMotion"
+    ],
+    "command": "setExcludeMotion",
+    "units": "\u2014",
+    "availability": "remote sensor reports OccupancySensitivity",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "switch",
+    "scope": "sensor",
+    "key": "exclude_temperature",
+    "attributes": [
+      "excludeTemperature"
+    ],
+    "command": "setExcludeTemperature",
+    "units": "on / off",
+    "availability": "remote sensor reports OccupancySensitivity",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "number",
+    "scope": "thermostat",
+    "key": "freeze_protection_low_limit",
+    "attributes": [
+      "freezeProtectionLowLimit"
+    ],
+    "command": "setFreezeProtectionLowLimit",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "d.configuration.freeze_protection_configured",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "number",
+    "scope": "thermostat",
+    "key": "heat_setpoint_min",
+    "attributes": [
+      "heatSetpointMin"
+    ],
+    "command": "setSetpointLimits",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "number",
+    "scope": "thermostat",
+    "key": "heat_setpoint_max",
+    "attributes": [
+      "heatSetpointMax"
+    ],
+    "command": "setSetpointLimits",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "number",
+    "scope": "thermostat",
+    "key": "cool_setpoint_min",
+    "attributes": [
+      "coolSetpointMin"
+    ],
+    "command": "setSetpointLimits",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "number",
+    "scope": "thermostat",
+    "key": "cool_setpoint_max",
+    "attributes": [
+      "coolSetpointMax"
+    ],
+    "command": "setSetpointLimits",
+    "units": "hub \u00b0F/\u00b0C",
+    "availability": "reported value; missing values remain unset",
+    "write": "accepted \u2192 reported-state confirmation"
+  },
+  {
+    "platform": "select",
+    "scope": "sensor",
+    "key": "occupancy_sensitivity",
+    "attributes": [
+      "occupancySensitivity"
+    ],
+    "command": "setOccupancySensitivity",
+    "units": "Off / Low / Medium / High",
+    "availability": "remote sensor reports OccupancySensitivity",
+    "write": "pending until sensor check-in; persists across restart"
+  }
+]

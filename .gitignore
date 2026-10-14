@@ -1,0 +1,5 @@
+.reference/
+.runtime/
+build/
+.DS_Store
+*.class
