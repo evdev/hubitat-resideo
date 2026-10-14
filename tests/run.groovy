@@ -1117,4 +1117,35 @@ test('Activation arriving during a priority read gets a fresh generation-scoped 
     s.respond(s.requests[0], 200, [:]); assert s.requests.size() == 2
     s.respond(s.requests[1], 200, [:]); assert s.state.streams.loc.activated
 }
+test('Sign-in banners explain the wait and display every password phase without secrets') {
+    def s = app(); s.settings.loginEmail = 'private@example.invalid'; s.settings.loginPassword = 'private-password'
+    s.appButtonHandler('signIn'); assert s.authenticationBanner().contains('Please wait')
+    s.performAuthUiAction(s.state.authUiAction)
+    ['authorize', 'loginPage', 'credentials', 'callback', 'resume', 'exchange'].eachWithIndex { step, index ->
+        if (index) s.authHttp(step, 'GET', s.constants().auth + '/test', null, [:])
+        String banner = s.authenticationBanner()
+        assert banner.contains('Step ' + (index + 1) + ' of 6')
+        assert !banner.contains('private@example.invalid') && !banner.contains('private-password')
+        assert s.mainPage().refreshInterval == 3
+    }
+    assert s.metadataCalls.any { it[0] == 'paragraph' && it[1].join().contains('allow several seconds') }
+    s.authFailure('Credentials rejected. Use browser sign-in.', false)
+    assert !s.mainPage().refreshInterval && !s.authenticationBanner().contains('Step ')
+    assert s.authenticationBanner().contains('#b71c1c')
+    s = app(); s.startBrowserLogin(); s.settings.browserRedirect = s.constants().browserRedirect + '?code=private-code&state=' + s.state.browserAttempt.nonce
+    s.finishBrowserLogin(); assert s.authenticationProgress().contains('Completing browser sign-in')
+    assert !s.authenticationBanner().contains('private-code') && !s.authenticationBanner().contains('Step 6')
+}
+test('Signed-in thermostat discovery refreshes the page until success and slows during cooldown') {
+    def s = ready(); s.state.authStatus = 'Connected'
+    s.enqueueRead('accounts', null, s.constants().root + '/v1/accounts', [:])
+    assert s.accountDiscoveryPending() && s.authenticationBanner().contains('Finding the thermostats')
+    assert s.authenticationBanner().contains('#146c2e') && s.mainPage().refreshInterval == 3
+    s.respond(s.requests[0], 429, [:], ['Retry-After': '60'])
+    assert s.mainPage().refreshInterval == 30 && s.authenticationProgress().contains('cooldown')
+    s.advance(60000L); s.respond(s.requests[-1], 200, fixture('accounts'))
+    assert !s.accountDiscoveryPending() && !s.mainPage().refreshInterval
+    assert !s.authenticationProgress() && s.state.authStatus == 'Connected'
+    s.state.authRequest = [step: 'refresh']; assert !s.authenticationProgress() && !s.mainPage().refreshInterval
+}
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)

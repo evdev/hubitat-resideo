@@ -2,7 +2,7 @@
 
 ## Automated verification
 
-Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **98 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
+Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **100 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
 
 The test runner uses Groovy **2.4.21**, a Hubitat DSL/method stub, a deterministic scheduler, fake asynchronous HTTP, fake WebSocket transport, and the upstream sanitized fixtures. No account credentials or live thermostat are used.
 
@@ -41,7 +41,7 @@ Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchang
 | HPM manages the app and all three drivers at v0.1.8 | Passed: HPM update completion, 2026-10-14 |
 | Integration account setup page opens | Passed, 2026-10-14 |
 | v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
-| Direct email/password sign-in | Pending |
+| Direct email/password sign-in | Passed on an additional physical hub: credentials accepted, token exchange HTTP 200 and 21 thermostats discovered; about 6.5 seconds, 2026-10-14 |
 | Browser-assisted sign-in and token persistence | Passed: token exchange, save/reopen and automatic rotated token refresh, 2026-10-14 |
 | Account-level thermostat discovery | Passed: authenticated accounts API returned thermostats |
 | Thermostat and room-sensor discovery / capability matching | 21 selected thermostat children; shadow/configuration/priority reads succeeded; rooms unsupported (404); read-only heating-only capability observed |
@@ -67,7 +67,7 @@ Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchang
 
 Do not mark a hardware/firmware combination validated until these checks have been observed on that combination. Do not infer broader model support from fixture tests.
 
-Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat behaviors: login buttons execute before submitted inputs are saved, and HTTP header values can include the header name or collapse repeated cookies. Version 0.1.4 saves inputs before scheduled sign-in actions, normalizes header values, and requests all native response headers. Highlighted status banners appear beside each login action and the connection check. The corrected native-header fallback passed the physical-hub connection check with all five cookies and CSRF present. Browser credential acceptance was subsequently verified with the v0.1.5 live token exchange; direct password sign-in remains pending.
+Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat behaviors: login buttons execute before submitted inputs are saved, and HTTP header values can include the header name or collapse repeated cookies. Version 0.1.4 saves inputs before scheduled sign-in actions, normalizes header values, and requests all native response headers. Highlighted status banners appear beside each login action and the connection check. The corrected native-header fallback passed the physical-hub connection check with all five cookies and CSRF present. Browser credential acceptance was subsequently verified with the v0.1.5 live token exchange; direct password sign-in was subsequently confirmed in the v0.1.8 live test described above.
 
 Two browser handoffs exceeded the original 15-minute setup-attempt lifetime. Their callbacks were correctly rejected as expired; no token exchange occurred. Version 0.1.5 extends only the pending browser setup request to one hour and displays its deadline. Fresh-login parameters and Auth0’s authorization-code lifetime are unchanged. A subsequent fresh callback completed token exchange and authenticated account discovery successfully with v0.1.5.
 

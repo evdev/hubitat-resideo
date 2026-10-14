@@ -70,3 +70,7 @@ A previous transport timeout was displayed as a sign-in failure despite a connec
 ## Large-account bootstrap — v0.1.8
 
 Live debug capture reproduced a full 100-request queue during a 21-thermostat bootstrap. Feed activation and ordinary metadata were reading the same priority endpoint as separate request kinds. They now share queued reads, while activation arriving after a read was dispatched receives a fresh generation-scoped request. Redacted diagnostics include selected, activated and resynchronized counts. Two new regressions bring the suite to 98 passing groups, including complete readiness for all 21 fixture thermostats. A queue-full command rejection now reports the cloud warning rather than unrelated authentication state.
+
+## Sign-in progress — v0.1.9
+
+Physical-hub logs confirmed direct password sign-in and authenticated thermostat discovery in about 6.5 seconds. Setup now explains the short wait, repeats the current password-flow step in each status banner, and describes browser completion and password-free checks separately. The page continues refreshing during account discovery and slows to 30 seconds during API cooldowns. Progress uses fixed text only. Regressions cover all six phases, failures, browser completion, discovery success/cooldown, and exclusion of secrets.

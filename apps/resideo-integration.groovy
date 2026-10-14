@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.8
+ * Resideo Integration for Hubitat, v0.1.9
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,18 +25,20 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.8']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.9']
 }
 
 def mainPage() {
     migrateCloudError()
     Map pageOptions = [name: 'mainPage', title: 'Resideo / First Alert', install: true, uninstall: true]
     if (state.authUiAction || (state.authRequest && state.authRequest.step != 'refresh')) pageOptions.refreshInterval = 3
+    else if (accountDiscoveryPending()) pageOptions.refreshInterval = ((state.cooldownUntil ?: 0L) as long) > now() ? 30 : 3
     dynamicPage(pageOptions) {
         section('Account') {
             paragraph authenticationBanner()
             input 'loginEmail', 'text', title: 'First Alert email', required: false, submitOnChange: true
             input 'loginPassword', 'password', title: 'Password (cleared after sign-in)', required: false, submitOnChange: true
+            paragraph 'After clicking, allow several seconds while the hub signs in to First Alert. This page refreshes automatically. Wait for a green Account connected message or a red error before trying again.'
             input 'signIn', 'button', title: 'Sign in with email and password'
             paragraph authenticationBanner()
             input 'browserSignIn', 'button', title: 'Start browser sign-in'
@@ -81,14 +83,38 @@ def mainPage() {
     }
 }
 
+boolean accountDiscoveryPending() {
+    state.tokens && ((state.httpQueue ?: []) + (state.inFlight ?: [:]).values()).any {
+        it.kind == 'accounts' && it.generation == generation()
+    }
+}
+String authenticationProgress() {
+    if (state.authUiAction) return 'Starting sign-in. Please wait while the hub saves your sign-in details.'
+    String step = state.authRequest?.step
+    if (step && step != 'refresh') {
+        if (state.loginAttempt?.connectionCheck) return step == 'authorize' ? 'Contacting First Alert.' : 'Checking the secure sign-in page.'
+        if (!state.loginAttempt && step == 'exchange') return 'Completing browser sign-in and connecting your account.'
+        return [authorize: 'Step 1 of 6: Contacting First Alert.',
+            loginPage: 'Step 2 of 6: Preparing secure sign-in.',
+            credentials: 'Step 3 of 6: Checking your email and password.',
+            callback: 'Step 4 of 6: Completing First Alert sign-in.',
+            resume: 'Step 5 of 6: Finishing sign-in.',
+            exchange: 'Step 6 of 6: Connecting your account.'][step] ?: ''
+    }
+    if (accountDiscoveryPending()) return ((state.cooldownUntil ?: 0L) as long) > now() ?
+        'Signed in. First Alert is busy; thermostat discovery will retry after its cooldown.' :
+        'Signed in. Finding the thermostats in your First Alert account.'
+    ''
+}
 String authenticationBanner() {
     String status = state.authStatus ?: 'Sign in to your First Alert account.'
     boolean failed = !!state.lastError || status in ['Sign-in failed', 'Sign-in expired', 'Authentication required']
     boolean good = !failed && (status == 'Connected' || status.startsWith('Connection check passed'))
     String color = failed ? '#b71c1c' : good ? '#146c2e' : '#805500'
     String background = failed ? '#ffebee' : good ? '#e8f5e9' : '#fff8e1'
+    String progress = failed ? '' : authenticationProgress()
     String label = failed ? 'Sign-in needs attention' : good ? (status == 'Connected' ? 'Account connected' : 'Connection check passed') : 'Sign-in status'
-    '<div role="status" aria-live="polite" style="padding:12px;margin:8px 0;border:2px solid ' + color + ';border-radius:6px;background:' + background + ';color:' + color + '"><strong>' + label + ': ' + escapeHtml(status) + '</strong>' + (state.lastError ? '<br>' + escapeHtml(state.lastError) : '') + '</div>'
+    '<div role="status" aria-live="polite" style="padding:12px;margin:8px 0;border:2px solid ' + color + ';border-radius:6px;background:' + background + ';color:' + color + '"><strong>' + label + ': ' + escapeHtml(status) + '</strong>' + (progress ? '<br>' + escapeHtml(progress) : '') + (state.lastError ? '<br>' + escapeHtml(state.lastError) : '') + '</div>'
 }
 
 void migrateCloudError() {

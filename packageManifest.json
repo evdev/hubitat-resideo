@@ -1,18 +1,18 @@
 {
   "packageName": "Resideo / First Alert Integration",
   "author": "Ephrayim (evdev)",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "minimumHEVersion": "2.2.9",
   "dateReleased": "2026-10-14",
-  "licenseFile": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.8/LICENSE",
+  "licenseFile": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.9/LICENSE",
   "documentationLink": "https://github.com/evdev/hubitat-resideo/blob/main/INSTALL.md",
-  "releaseNotes": "Share priority reads with feed activation to complete the 21-thermostat bootstrap without filling the request queue. Add selected, activated and resynchronized stream counts to redacted diagnostics. Includes clearer green/red sign-in status and the native event bridge.",
+  "releaseNotes": "Show six password sign-in phases and instructions to allow several seconds. Keep setup refreshed while finding thermostats, with slower refresh during API cooldowns. Browser completion and connection checks have their own progress messages.",
   "apps": [
     {
       "id": "0674ebf9-00d6-53c2-9ccf-b2f07756c0db",
       "name": "Resideo Integration",
       "namespace": "resideoHubitat",
-      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.8/apps/resideo-integration.groovy",
+      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.9/apps/resideo-integration.groovy",
       "required": true,
       "oauth": false,
       "primary": true
@@ -23,21 +23,21 @@
       "id": "6b8f0677-f8e1-545a-a3b5-2f80336d195e",
       "name": "Resideo Connection",
       "namespace": "resideoHubitat",
-      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.8/drivers/resideo-connection.groovy",
+      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.9/drivers/resideo-connection.groovy",
       "required": true
     },
     {
       "id": "a94bb4df-1ef1-5c27-9607-3ec2e4d2fcce",
       "name": "Resideo Thermostat",
       "namespace": "resideoHubitat",
-      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.8/drivers/resideo-thermostat.groovy",
+      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.9/drivers/resideo-thermostat.groovy",
       "required": true
     },
     {
       "id": "c11094b4-159f-5751-9f9f-3695e342d876",
       "name": "Resideo Room Sensor",
       "namespace": "resideoHubitat",
-      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.8/drivers/resideo-room-sensor.groovy",
+      "location": "https://raw.githubusercontent.com/evdev/hubitat-resideo/v0.1.9/drivers/resideo-room-sensor.groovy",
       "required": true
     }
   ]
