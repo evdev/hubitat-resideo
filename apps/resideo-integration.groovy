@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.6
+ * Resideo Integration for Hubitat, v0.1.7
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,10 +25,11 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.6']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.7']
 }
 
 def mainPage() {
+    migrateCloudError()
     Map pageOptions = [name: 'mainPage', title: 'Resideo / First Alert', install: true, uninstall: true]
     if (state.authUiAction || (state.authRequest && state.authRequest.step != 'refresh')) pageOptions.refreshInterval = 3
     dynamicPage(pageOptions) {
@@ -70,6 +71,7 @@ def mainPage() {
             input 'logEnable', 'bool', title: 'Status and warning logs', defaultValue: true
             input 'debugEnable', 'bool', title: 'Debug logging for 30 minutes', defaultValue: false
             paragraph escapeHtml(operationSummary())
+            if (state.cloudError) paragraph '<div role="alert" style="padding:12px;margin:8px 0;border:2px solid #b71c1c;border-radius:6px;background:#ffebee;color:#b71c1c"><strong>Cloud communication needs attention</strong><br>' + escapeHtml(state.cloudError) + '</div>'
             input 'showDiagnostics', 'button', title: 'Prepare redacted diagnostics'
             input 'clearDiagnostics', 'button', title: 'Clear diagnostic history and counters'
             input 'testSignInConnection', 'button', title: 'Check First Alert sign-in connection (no password needed)'
@@ -87,6 +89,23 @@ String authenticationBanner() {
     String background = failed ? '#ffebee' : good ? '#e8f5e9' : '#fff8e1'
     String label = failed ? 'Sign-in needs attention' : good ? (status == 'Connected' ? 'Account connected' : 'Connection check passed') : 'Sign-in status'
     '<div role="status" aria-live="polite" style="padding:12px;margin:8px 0;border:2px solid ' + color + ';border-radius:6px;background:' + background + ';color:' + color + '"><strong>' + label + ': ' + escapeHtml(status) + '</strong>' + (state.lastError ? '<br>' + escapeHtml(state.lastError) : '') + '</div>'
+}
+
+void migrateCloudError() {
+    String previous = state.lastError ?: ''
+    if (['Request queue is full.', 'Cloud request timed out', 'Resideo HTTP ', 'Resideo returned an invalid thermostat state.', 'Resideo returned invalid optional device data.'].any { previous.startsWith(it) }) {
+        setCloudError(previous); state.lastError = null
+    }
+}
+void setCloudError(String message, Map request = [:]) {
+    state.cloudError = message
+    state.cloudErrorContext = request ? [kind: request.kind, mac: request.mac] : [:]
+}
+void clearCloudError(Map request) {
+    Map context = state.cloudErrorContext ?: [:]
+    if (!context || (context.kind == request.kind && context.mac == request.mac)) {
+        state.cloudError = null; state.cloudErrorContext = null
+    }
 }
 
 void installed() { initialize() }
@@ -240,6 +259,7 @@ String authFailureReason(String message) {
 }
 
 void initialize() {
+    migrateCloudError()
     boolean interruptedRefresh = state.refreshing == true
     stopIntegration(false)
     state.cache = state.cache ?: [:]
@@ -476,7 +496,7 @@ void testSignInConnection() {
 }
 void expireLogin() {
     diagnostic('authFailure', [reason: 'expired']); clearLogin()
-    state.authStatus = state.tokens ? 'Connected' : 'Sign-in expired'
+    state.authStatus = state.tokens ? 'Connected; sign-in attempt expired' : 'Sign-in expired'
     state.lastError = 'Sign-in expired. Start again.'
 }
 void clearLogin(boolean clearPassword = true) {
@@ -789,7 +809,7 @@ void enqueueRequest(Map r) {
     }
     if (queue.size() >= 100) {
         diagnostic('queueFull', [queued: queue.size()])
-        state.lastError = 'Request queue is full. Try again after pending work completes.'
+        setCloudError('Request queue is full. Try again after pending work completes.')
         if (r.kind == 'write') rejectCommand(r.context as Map, state.lastError as String)
         return
     }
@@ -881,13 +901,14 @@ void completeRequest(String id, int status, Map data, Map headers, boolean uncer
         handleSuccess(r, data)
     } else if (status == 404 && r.kind in ['rooms', 'configuration', 'priority', 'activation']) {
         recordUnsupported(r)
+        clearCloudError(r)
     } else {
         if (status == 0 || status >= 500) {
             int failures = Math.min(6, ((state.failureCount ?: 0) as int) + 1)
             state.failureCount = failures
             state.cooldownUntil = now() + Math.min(900L, 30L * (1L << (failures - 1))) * 1000L
         }
-        state.lastError = status == 0 ? 'Cloud request timed out or could not connect.' : 'Resideo HTTP ' + status + ': ' + safeServiceMessage(data)
+        setCloudError(status == 0 ? 'Cloud request timed out or could not connect.' : 'Resideo HTTP ' + status + ': ' + safeServiceMessage(data, [r.azureToken]), r)
         diagnostic('requestFailed', detail + [reason: status == 0 ? 'transport' : 'cloudRejected', retrySeconds: remainingCooldown()])
         if (r.kind == 'write') ambiguousWrite(r, status == 0 || status >= 500 || uncertain)
         else if (r.kind in ['negotiate', 'azureNegotiate']) streamFailed(r.context as Map)
@@ -911,10 +932,10 @@ int retryDelay(Map headers) {
 }
 void handleSuccess(Map r, Map data) {
     switch (r.kind) {
-        case 'accounts': discoverAccounts(data); return
-        case 'negotiate': azureNegotiate(r, data); return
-        case 'azureNegotiate': connectNegotiated(r, data); return
-        case 'write': acceptWrite(r, data); return
+        case 'accounts': discoverAccounts(data); clearCloudError(r); return
+        case 'negotiate': azureNegotiate(r, data); clearCloudError(r); return
+        case 'azureNegotiate': connectNegotiated(r, data); clearCloudError(r); return
+        case 'write': acceptWrite(r, data); clearCloudError(r); return
     }
     if (!r.mac || !selectedMacs().contains(r.mac)) return
     Map cache = state.cache ?: [:]
@@ -930,11 +951,11 @@ void handleSuccess(Map r, Map data) {
     }
     // A malformed 2xx shadow must not erase live state or become a successful bootstrap.
     if (field == 'shadow' && (!(data.Reported instanceof Map) || !['Online', 'SystemSwitch', 'DisplayedIndoorTemperature', 'Setpoint'].any { data.Reported.containsKey(it) })) {
-        state.lastError = 'Resideo returned an invalid thermostat state.'; diagnostic('invalidResponse', requestDiagnostic(r)); return
+        setCloudError('Resideo returned an invalid thermostat state.', r); diagnostic('invalidResponse', requestDiagnostic(r)); return
     }
     if ((field == 'configuration' && !(data.Reported instanceof Map)) ||
         (field == 'rooms' && (!(data.Rooms instanceof List) || data.Rooms.any { !(it instanceof Map) || (it.Accessories != null && (!(it.Accessories instanceof List) || it.Accessories.any { !(it instanceof Map) })) }))) {
-        state.lastError = 'Resideo returned invalid optional device data.'; diagnostic('invalidResponse', requestDiagnostic(r)); return
+        setCloudError('Resideo returned invalid optional device data.', r); diagnostic('invalidResponse', requestDiagnostic(r)); return
     }
     d[field] = data
     Map revisions = d.revisions ?: [:]; revisions[field] = ((revisions[field] ?: 0L) as long) + 1L; d.revisions = revisions
@@ -950,6 +971,7 @@ void handleSuccess(Map r, Map data) {
     if (r.context?.reconcile) reconcilePending(r.mac as String, true, field, r.sentAt as long)
     resolveUncertainWrite(r.mac as String, field, r.sentAt as long)
     if (r.kind == 'activation') noteActivation(r, true)
+    clearCloudError(r)
     updateStreamReadiness(r.mac as String)
     publishDevice(r.mac as String)
 }
@@ -1668,12 +1690,12 @@ Map diagnosticSnapshot() {
          sensorCount: accessories((state.cache ?: [:])[mac]?.rooms ?: [:]).count { it.accessory.AccessoryAttribute?.Type == 'IndoorAirSensor' }] }]
 }
 String operationSummary() { 'Selected thermostats: ' + selectedMacs().size() + '. ' + (state.streams ?: [:]).values().count { it.ready } + ' live location stream(s). Fallback polling: ' + pollingMinutes() + ' minutes.' }
-String safeServiceMessage(Map body) {
+String safeServiceMessage(Map body, List extraSecrets = []) {
     String value = (body.message ?: body.Message ?: body.error_description ?: 'Request rejected by cloud service.').toString()
-    List secrets = [settings.loginEmail, settings.loginPassword, state.tokens?.access_token, state.tokens?.refresh_token]
+    List secrets = [settings.loginEmail, settings.loginPassword, state.tokens?.access_token, state.tokens?.refresh_token] + extraSecrets
     secrets += (state.discovered ?: [:]).keySet()
     secrets.findAll { it }.each { value = value.replace(it.toString(), '[redacted]') }
-    value.replaceAll(/(?i)bearer\s+\S+/, 'Bearer [redacted]').replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, '[redacted]').take(200)
+    value.replaceAll(/(?i)bearer\s+\S+/, 'Bearer [redacted]').replaceAll(/[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, '[redacted]').replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, '[redacted]').take(200)
 }
 Map parseJsonMap(String text) { try { def p = new JsonSlurper().parseText(text ?: '{}'); p instanceof Map ? p : [:] } catch (Exception ignored) { [:] } }
 int responseStatus(resp) { try { (resp.getStatus() ?: 0) as int } catch (Exception ignored) { 0 } }

@@ -1,4 +1,4 @@
-/* Resideo thermostat for Hubitat, v0.1.6. MIT; see LICENSE.upstream. */
+/* Resideo thermostat for Hubitat, v0.1.7. MIT; see LICENSE.upstream. */
 metadata {
     definition(name: 'Resideo Thermostat', namespace: 'resideoHubitat', author: 'Ephrayim (evdev)', singleThreaded: true) {
         capability 'Actuator'
@@ -180,7 +180,7 @@ void queueParentMessage(Map message) {
     if (outbox.size() < 64 && used + bytes <= 262144) {
         outbox << packet; state.bridgeOutbox = outbox; state.bridgeBytes = used + bytes
     } else {
-        if (!state.bridgeOverflow) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
+        if (!state.bridgeOverflow && settings.logEnable != false) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
         state.bridgeOverflow = true
         if (message.kind == 'command') sendEvent(name: 'commandStatus', value: 'failed')
     }

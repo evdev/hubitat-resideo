@@ -62,3 +62,7 @@ Live attempts expired during the browser-to-hub handoff. The pending browser set
 ## Single-threaded parent/driver gates — v0.1.6
 
 Physical-hub initialization exposed circular gate acquisition when a parent-driven connection method called back into the single-threaded app. Native location events now announce only the child ID; the app drains bounded private outboxes in its own event context. All three drivers retain serialized execution and never call the parent synchronously. Regressions model a held parent gate, owned-child routing, stale generations, bounded overflow, negotiation priority, saved device-selection/removal input, and skipped ordinary polls for unsupported rooms. The suite has 94 passing groups.
+
+## Authentication versus communication status — v0.1.7
+
+A previous transport timeout was displayed as a sign-in failure despite a connected account. Authentication errors and cloud-operation warnings now use separate state and UI sections. Legacy transport errors migrate to Operation, and a successful response from the affected endpoint clears its warning. Azure and JWT-shaped tokens are redacted from service messages. Explicitly false SignalR subscription results are rejected rather than treated as connected. Existing account authentication is retained when a later browser attempt expires, with that distinction stated in its status.

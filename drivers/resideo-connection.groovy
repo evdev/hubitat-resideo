@@ -1,4 +1,4 @@
-/* Resideo SignalR connection for Hubitat, v0.1.6. MIT; see LICENSE.upstream.
+/* Resideo SignalR connection for Hubitat, v0.1.7. MIT; see LICENSE.upstream.
  * Protocol adapted from sfcodes/ha-resideo 0e2947b (c) 2026 Semyon Fishman.
  */
 import groovy.json.JsonOutput
@@ -132,7 +132,7 @@ void handleFrame(Map frame) {
         return
     }
     if (frame.type == 3 && frame.invocationId?.toString() == state.subscribeId) {
-        if (frame.error) { connectionFailed('SignalR subscription rejected'); return }
+        if (frame.error || frame.result == false) { connectionFailed('SignalR subscription rejected'); return }
         if (state.stage == 'subscribing') {
             state.stage = 'connected'; state.backoff = 1
             unschedule('setupTimeout')
@@ -213,7 +213,7 @@ void queueParentMessage(Map message) {
     if (outbox.size() < 64 && used + bytes <= 262144) {
         outbox << packet; state.bridgeOutbox = outbox; state.bridgeBytes = used + bytes
     } else {
-        if (!state.bridgeOverflow) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
+        if (!state.bridgeOverflow && settings.logEnable != false) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
         state.bridgeOverflow = true
         if (message.kind == 'command') sendEvent(name: 'commandStatus', value: 'failed')
     }

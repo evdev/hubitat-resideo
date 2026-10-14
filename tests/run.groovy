@@ -426,7 +426,7 @@ test('Disabled integration cancels work and secrets never enter debug logs') {
 test('Malformed successful shadows do not erase cached state') {
     def s = ready(); s.enqueueRead('shadow', mac, s.thermostatPath(mac), [:]); s.respond(s.requests[0], 200, [:])
     assert s.state.cache[mac].shadow.Reported.DisplayedIndoorTemperature == 76
-    assert s.state.lastError.contains('invalid thermostat state')
+    assert s.state.cloudError.contains('invalid thermostat state')
 }
 test('Simulated 24-hour operation crosses token rotations, feed renewals, and hub restart') {
     def s = ready(); Map graph = fixture('accounts')
@@ -1066,5 +1066,25 @@ test('Negotiation takes priority over account bootstrap and unsupported rooms sk
     s = ready(); s.state.cache[mac].unsupported = ['rooms']; s.refreshDevice(mac, false)
     assert !s.requests.any { it.params.uri.endsWith('/group/0/rooms') }
     s.refreshDevice(mac, true); assert s.requests.any { it.params.uri.endsWith('/group/0/rooms') } || s.state.httpQueue.any { it.kind == 'rooms' }
+}
+test('Recovered cloud errors do not turn a connected account red or erase auth failures') {
+    def s = ready(); s.state.authStatus = 'Connected'; s.state.lastError = 'Cloud request timed out or could not connect.'
+    s.mainPage(); assert !s.state.lastError && s.state.cloudError && s.authenticationBanner().contains('#146c2e')
+    assert s.metadataCalls.any { it[0] == 'paragraph' && it[1].join().contains('Cloud communication needs attention') }
+    s.setCloudError('Temporary cloud failure', [kind: 'shadow', mac: mac])
+    s.clearCloudError([kind: 'rooms', mac: mac]); assert s.state.cloudError
+    s.enqueueRead('shadow', mac, s.thermostatPath(mac), [:]); s.respond(s.requests[-1], 200, fixture('device'))
+    assert !s.state.cloudError
+    s.state.lastError = 'Credentials rejected'; s.state.authStatus = 'Sign-in failed'; s.mainPage()
+    assert s.state.lastError && s.authenticationBanner().contains('#b71c1c')
+    assert !s.safeServiceMessage([message: 'azure-secret abcdefghijkl.abcdefghijkl.abcdefghijkl'], ['azure-secret']).contains('azure-secret')
+    assert !s.safeServiceMessage([message: 'abcdefghijkl.abcdefghijkl.abcdefghijkl']).contains('abcdefghijkl')
+}
+test('SignalR explicitly false subscription completion is rejected') {
+    def c = load('drivers/resideo-connection.groovy'); c.device.data = [locationId: 'loc']; c.startConnection(1L)
+    c.openSocket('wss://example.service.signalr.net/client', 1L, c.connectionGeneration())
+    c.webSocketStatus('status: open'); c.parse('{}\u001e')
+    c.parse(JsonOutput.toJson([type: 3, invocationId: '1', result: false]) + '\u001e')
+    assert c.state.stage == 'backoff' && !messages(c).any { it.kind == 'streamActivated' }
 }
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)
