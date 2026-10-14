@@ -38,7 +38,7 @@ Do not create virtual thermostat or sensor devices manually. The app provisions 
 
 1. Enter the email and password you use in First Alert.
 2. Select **Sign in with email and password**.
-3. Wait for the account status to change, then refresh/reopen the app page if needed.
+3. Wait for the highlighted status beside the button. Green indicates success; red explains the next action. The same status appears at the top and beside the connection check.
 4. If CAPTCHA, MFA, or another automated-login restriction is reported, use browser sign-in below.
 
 The password is used only by Resideo's sign-in flow and is cleared after completion or cancellation. The hub retains the resulting access and refresh tokens. Hub administrators and backups can access app state; share the built-in redacted diagnostics rather than raw app state or login redirects.

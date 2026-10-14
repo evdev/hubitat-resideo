@@ -74,7 +74,7 @@ class FakeNativeResponse {
     List headers = []
     int getStatus() { status }
     Object getAllHeaders() { headers as Object[] }
-    Object getHeaders() { headers }
+    Object getHeaders() { headers.collectEntries { [(it.name): it] } }
 }
 class FakeAtomicState {
     Map durable

@@ -2,7 +2,7 @@
 
 ## Automated verification
 
-Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **84 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
+Verified on **2026-10-14**, including the follow-up bug review and optional logging checks: all **88 test groups passed** with Groovy 2.4.21 on Java 26.0.1. Command: `RESIDEO_GROOVY_JAR=/private/tmp/resideo-groovy-all-2.4.21.jar sh tests/run.sh`. The runtime SHA-256 is `de65260cf2070442e99882f2f3d72e7531725c1e6a257446cc0cea525c607bd0`; the runner verifies it before executing.
 
 The test runner uses Groovy **2.4.21**, a Hubitat DSL/method stub, a deterministic scheduler, fake asynchronous HTTP, fake WebSocket transport, and the upstream sanitized fixtures. No account credentials or live thermostat are used.
 
@@ -33,13 +33,14 @@ The simulation is not a live 24-hour soak and the fake runtime does not enforce 
 
 On **2026-10-14**, browser access was provided and **Hubitat Package Manager v1.9.13** installed package **v0.1.0**. HPM's managed inventory confirmed the integration app and all three drivers, and the integration's account setup page opened successfully. The repository was made public with explicit user approval so HPM could download its manifest and versioned source URLs. Each downloaded file was checked against the tested local source before installation.
 
-The user is completing First Alert authentication. No credentials, screenshots, hub addresses, or device state are included in this repository. Hub model/firmware and thermostat/sensor model/firmware remain to be recorded for hardware validation:
+The user is completing First Alert authentication. No credentials, screenshots, hub addresses, or device state are included in this repository. Hub firmware is **2.5.2.134**. Hub model and thermostat/sensor models and firmware remain to be recorded for hardware validation:
 
 | Check | Status |
 |---|---|
 | Compile all four scripts on the physical hub | Passed through HPM v1.9.13, 2026-10-14 |
 | HPM manages the app and all three drivers at v0.1.0 | Passed, 2026-10-14 |
 | Integration account setup page opens | Passed, 2026-10-14 |
+| v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
 | Direct email/password sign-in | Pending |
 | Browser-assisted sign-in and token persistence | Pending |
 | Thermostat and room-sensor discovery / capability matching | Pending |
@@ -65,4 +66,4 @@ The user is completing First Alert authentication. No credentials, screenshots, 
 
 Do not mark a hardware/firmware combination validated until these checks have been observed on that combination. Do not infer broader model support from fixture tests.
 
-The v0.1.1 live connection check reproduced the login-page redirect and missing-CSRF problem. v0.1.2/v0.1.3 extend its handling, but the remote-admin session expired before the follow-up update could be installed. The user must reconnect the hub before those live checks and fresh account authentication can complete. No live credential acceptance is claimed from the offline suite.
+Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat behaviors: login buttons execute before submitted inputs are saved, and HTTP header values can include the header name or collapse repeated cookies. Version 0.1.4 saves inputs before scheduled sign-in actions, normalizes header values, and requests all native response headers. Highlighted status banners appear beside each login action and the connection check. The corrected native-header fallback passed the physical-hub connection check with all five cookies and CSRF present. Fresh credential acceptance remains pending; no live account success is inferred from the offline suite.
