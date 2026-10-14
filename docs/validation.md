@@ -38,21 +38,21 @@ Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchang
 | Check | Status |
 |---|---|
 | Compile all four scripts on the physical hub | Passed through HPM v1.9.13, 2026-10-14 |
-| HPM manages the app and all three drivers at v0.1.7 | Passed: HPM update completion, 2026-10-14 |
+| HPM manages the app and all three drivers at v0.1.8 | Passed: HPM update completion, 2026-10-14 |
 | Integration account setup page opens | Passed, 2026-10-14 |
 | v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
 | Direct email/password sign-in | Pending |
-| Browser-assisted sign-in and token persistence | Passed: token exchange and save/reopen without signing in again, 2026-10-14 |
+| Browser-assisted sign-in and token persistence | Passed: token exchange, save/reopen and automatic rotated token refresh, 2026-10-14 |
 | Account-level thermostat discovery | Passed: authenticated accounts API returned thermostats |
 | Thermostat and room-sensor discovery / capability matching | 21 selected thermostat children; shadow/configuration/priority reads succeeded; rooms unsupported (404); read-only heating-only capability observed |
 | Standard dashboard thermostat controls | Pending |
 | Rule Machine standard and custom commands | Pending |
-| Changes from First Alert and the wall thermostat reach Hubitat | Pending |
+| Changes from First Alert and the wall thermostat reach Hubitat | Live temperature stream notifications observed; explicit app/wall control convergence remains pending |
 | Accepted commands match actual device state | Pending |
-| Stream loss → polling → restored push | Pending |
+| Stream loss → polling → restored push | Polling during partial stream setup and transition to ready push verified; deliberate network interruption remains pending |
 | Hub restart restores operation without sign-in | Pending |
 | Live 24-hour token/feed renewal soak | Pending |
-| Live diagnostic/log inspection for secrets | Passed for authentication and account discovery; device/stream inspection pending |
+| Live diagnostic/log inspection for secrets | Passed for inspected authentication, device reads, token refresh, stream status and temperature notifications; no credentials or raw network URLs observed |
 
 ## Procedure
 
@@ -71,4 +71,6 @@ Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat beh
 
 Two browser handoffs exceeded the original 15-minute setup-attempt lifetime. Their callbacks were correctly rejected as expired; no token exchange occurred. Version 0.1.5 extends only the pending browser setup request to one hour and displays its deadline. Fresh-login parameters and Auth0’s authorization-code lifetime are unchanged. A subsequent fresh callback completed token exchange and authenticated account discovery successfully with v0.1.5.
 
-Live device initialization with v0.1.5 created the selected thermostat children and populated read-only state, configuration and priority. Room endpoints returned 404 and were marked unsupported. It also exposed circular parent/driver single-threaded gate waits. Version 0.1.6 replaces synchronous driver callbacks with native child-ID events and private outboxes; physical-hub verification confirmed stream events and automatic token refresh without new gate errors. The stream remained partly initialized because duplicate priority/activation requests filled the 100-request queue during the 21-device bootstrap. Version 0.1.8 shares these reads; complete physical-hub readiness is pending. No heating/cooling setting was changed during these checks.
+Live device initialization with v0.1.5 created the selected thermostat children and populated read-only state, configuration and priority. Room endpoints returned 404 and were marked unsupported. It also exposed circular parent/driver single-threaded gate waits. Version 0.1.6 replaces synchronous driver callbacks with native child-ID events and private outboxes; physical-hub verification confirmed stream events and automatic token refresh without new gate errors. The stream remained partly initialized because duplicate priority/activation requests filled the 100-request queue during the 21-device bootstrap. Version 0.1.8 shares these reads; physical-hub verification then confirmed all 21 feeds activated, all 21 thermostats resynchronized, a ready stream, an empty request queue, and current data with push as its update source. New live temperature notifications were observed, with no new queue-full or gate-acquisition errors during that startup. No heating/cooling setting was changed during these checks.
+
+Version 0.1.8 was installed through HPM on the physical hub. The account remained connected across both code updates and reinitialization. All 21 existing thermostat children retained their identities; the total child-creation counter stayed at 22 (21 thermostats and one connection). Redacted diagnostics reported 21 selected, 21 activated, 21 resynchronized, zero queued/active requests, and current/push data for every thermostat. The live log recorded streamReady with source push and incoming temperature deltas. Status logging was enabled and the diagnostic debug window remained bounded to 30 minutes. No HVAC control writes were performed.

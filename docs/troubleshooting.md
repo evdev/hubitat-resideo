@@ -32,6 +32,8 @@ To change settings unsupported by the upstream integration, use First Alert. Do 
 
 ## Diagnostics
 
+A green **Account connected** banner means authentication succeeded. A red **Cloud communication needs attention** warning in Operation describes a separate API problem; it does not mean you need to sign in again.
+
 Select **Prepare redacted diagnostics** in the app. Copy that output together with the error description, hub firmware, thermostat model, integration version, and which action failed.
 
 The app's **Operation** section provides two logging settings:
@@ -47,7 +49,7 @@ Each of the three drivers also has **Driver debug logging for 30 minutes** on it
 
 Debug logging turns itself off after 30 minutes. Saving settings, reconnecting, or restarting the integration does not extend an existing capture. Each app/driver limits debug output to 120 entries per minute and emits one suppression notice when that limit is reached. Repeated identical status/warning entries in the app are suppressed for one minute.
 
-The export retains up to 60 recent sanitized events, counters since installation or the last clearing, cooldown status, location stream status, and pending/deferred command counts. Significant events are retained even with status logs disabled; detailed events require debug mode. Counters include suppressed activity, so they can reveal a recurring failure after debug mode expires. **Clear diagnostic history and counters** removes the saved capture without altering devices, credentials, or pending commands.
+The export retains up to 60 recent sanitized events, counters since installation or the last clearing, cooldown status, location stream status with selected/activated/resynchronized counts, and pending/deferred command counts. A connected stream becomes ready only when every selected thermostat is activated and resynchronized; these counts identify incomplete startup. Significant events are retained even with status logs disabled; detailed events require debug mode. Counters include suppressed activity, so they can reveal a recurring failure after debug mode expires. **Clear diagnostic history and counters** removes the saved capture without altering devices, credentials, or pending commands.
 
 Logs and exports use stable pseudonymous device/location references. They exclude credentials, email addresses, cookies, authorization codes, raw identifiers, device labels, full API URLs, raw payloads, and WebSocket status strings. Raw app state, browser redirects, hub backups, and developer-tool network captures can contain account credentials; they are not the diagnostic export.
 
