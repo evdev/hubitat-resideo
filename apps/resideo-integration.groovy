@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.5
+ * Resideo Integration for Hubitat, v0.1.6
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.5']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.6']
 }
 
 def mainPage() {
@@ -55,12 +55,12 @@ def mainPage() {
         section('Devices') {
             input 'discover', 'button', title: 'Discover / refresh account'
             Map options = (state.discovered ?: [:]).collectEntries { mac, d -> [(mac): "${d.locationName} — ${d.name}"] }
-            if (options) input 'selectedThermostats', 'enum', title: 'Thermostats to include', options: options, multiple: true, required: false
+            if (options) input 'selectedThermostats', 'enum', title: 'Thermostats to include', options: options, multiple: true, required: false, offerAll: true, submitOnChange: true
             input 'applyDevices', 'button', title: 'Apply device selection'
             paragraph 'Room sensors are added automatically. Removed or deselected devices remain available for explicit removal below.'
             Map orphaned = getChildDevices().findAll { it.getDataValue('orphaned') == 'true' }.collectEntries { [(it.deviceNetworkId): it.displayName] }
             if (orphaned) {
-                input 'removeDevices', 'enum', title: 'Unavailable devices to remove (check automations first)', options: orphaned, multiple: true, required: false
+                input 'removeDevices', 'enum', title: 'Unavailable devices to remove (check automations first)', options: orphaned, multiple: true, required: false, submitOnChange: true
                 input 'removeOrphans', 'button', title: 'Remove the selected unavailable devices'
             }
         }
@@ -252,6 +252,7 @@ void initialize() {
     configureLogging()
     diagnostic('initialized', [generation: generation(), status: enabled() ? 'connecting' : 'disabled', count: selectedMacs().size()])
     subscribe(location, 'systemStart', 'systemStart')
+    subscribe(location, 'resideoBridge-' + app.id, 'childMessage')
     if (enabled() && state.tokens?.refresh_token) {
         state.authStatus = 'Connected'
         scheduleTokenRefresh()
@@ -289,13 +290,8 @@ void appButtonHandler(String name) {
         case 'finishBrowser': scheduleAuthUiAction('browser'); break
         case 'cancelLogin': clearLogin(); state.lastError = null; state.authStatus = state.tokens ? 'Connected' : 'Sign-in cancelled'; break
         case 'discover': enqueueRead('accounts', null, constants().root + '/v1/accounts', [:]); break
-        case 'applyDevices': synchronizeSelection(); break
-        case 'removeOrphans':
-            asList(settings.removeDevices).each { dni ->
-                def d = getChildDevice(dni.toString())
-                if (d?.getDataValue('orphaned') == 'true') deleteChildDevice(dni.toString())
-            }
-            app.removeSetting('removeDevices'); break
+        case 'applyDevices': runIn(1, 'applySavedDeviceSelection', [data: [generation: generation()]]); break
+        case 'removeOrphans': runIn(1, 'removeSavedOrphans', [data: [generation: generation()]]); break
         case 'showDiagnostics': state.diagnostics = JsonOutput.prettyPrint(JsonOutput.toJson(diagnosticSnapshot())); break
         case 'clearDiagnostics':
             state.diagnostics = null; state.diagnosticEvents = []; state.diagnosticCounters = [:]
@@ -305,8 +301,27 @@ void appButtonHandler(String name) {
     }
 }
 
-// Driver entrypoints only schedule messages. All shared state changes occur in this
-// app's serialized scheduled handlers / HTTP callbacks, never in a child execution.
+void applySavedDeviceSelection(Map ctx) {
+    if (ctx.generation == generation()) synchronizeSelection()
+}
+void removeSavedOrphans(Map ctx) {
+    if (ctx.generation != generation()) return
+    asList(settings.removeDevices).each { dni ->
+        def child = getChildDevice(dni.toString())
+        if (child?.getDataValue('orphaned') == 'true') deleteChildDevice(dni.toString())
+    }
+    app.removeSetting('removeDevices')
+}
+
+// Native events carry only a child ID. Draining its private outbox while holding
+// this app's gate is safe because drivers never synchronously call the parent.
+void childMessage(evt) {
+    def child = getChildDevices().find { it.id.toString() == evt.value?.toString() }
+    if (!child) return
+    asList(child.drainMessages()).each { message -> if (message instanceof Map) processMessage(message as Map) }
+}
+// Retain this scheduling entrypoint for compatibility; current drivers use the
+// event bridge to avoid acquiring parent and child gates in opposite orders.
 void postMessage(Map msg) { runInMillis(1, 'processMessage', [overwrite: false, data: [accountGeneration: generation()] + msg]) }
 void processMessage(Map msg) {
     if (!enabled()) return
@@ -314,6 +329,11 @@ void processMessage(Map msg) {
     switch (msg.kind) {
         case 'command': acceptCommand(msg); break
         case 'refresh': refreshDevice(msg.mac as String, true); break
+        case 'bridgeOverflow':
+            diagnostic('queueFull', [reason: 'queueFull'])
+            if (msg.mac) refreshDevice(msg.mac as String, false)
+            else if (msg.locationId) locationMacs(msg.locationId as String).each { refreshDevice(it.toString(), false) }
+            break
         case 'streamRequest': negotiate(msg.locationId as String, msg.connectionGeneration as long); break
         case 'streamStatus': streamStatus(msg); break
         case 'streamEvent': handleStreamEvent(msg); break
@@ -649,8 +669,8 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
     }
 }
 String trustedAuthRedirect(String value) {
-    // java.net.URI is rejected by some Hubitat sandbox versions. Only the
-    // known HTTPS origin and root-relative redirects are needed by Auth0.
+    // Only the known HTTPS origin and root-relative routes are needed by
+    // Auth0. Check the complete origin before forwarding any login cookies.
     String target = value?.startsWith('/') && !value.startsWith('//') ? constants().auth + value : value
     if (!target || target.contains('#') || target.contains('\\') || !(target ==~ /(?i)^https:\/\/login\.resideo\.com(?::443)?(?:[\/?][^\s]*)?$/))
         throw validationError('Unexpected sign-in redirect. Use browser sign-in.')
@@ -789,7 +809,11 @@ void pump() {
     while (inflight.size() < 2 && queue) {
         if (((state.cooldownUntil ?: 0L) as long) > now()) { runIn(remainingCooldown(), 'pump'); break }
         Map busy = state.writeBusy ?: [:]
-        int index = queue.findIndexOf { it.kind != 'write' || (!busy[it.mac] && !writeBlocked(it)) }
+        // Negotiation must not sit behind a large account's initial reads;
+        // its driver has a finite setup timeout. Foreground writes retain
+        // per-thermostat serialization while taking priority over polling.
+        int index = queue.findIndexOf { it.kind in ['negotiate', 'azureNegotiate', 'activation', 'write'] && (it.kind != 'write' || (!busy[it.mac] && !writeBlocked(it))) }
+        if (index < 0) index = queue.findIndexOf { it.kind != 'write' || (!busy[it.mac] && !writeBlocked(it)) }
         if (index < 0) break
         Map r = queue.remove(index)
         if (r.generation != generation()) continue
@@ -983,7 +1007,7 @@ def ensureChild(String type, String dni, String label, Map values) {
         child = addChildDevice('resideoHubitat', type, dni, [name: type, label: label, isComponent: values.kind == 'connection'])
         diagnostic('deviceCreated', values.kind == 'connection' ? [location: diagnosticAlias('location', values.locationId)] : [device: diagnosticDevice(values.mac as String, values.accessoryId)])
     }
-    values.each { k, v -> if (v != null) child.updateDataValue(k.toString(), v.toString()) }
+    (values + [appId: app.id, accountGeneration: generation()]).each { k, v -> if (v != null) child.updateDataValue(k.toString(), v.toString()) }
     child
 }
 void synchronizeSelection() {
@@ -1045,7 +1069,8 @@ void synchronizeSensors(String mac) {
 void refreshDevice(String mac, boolean metadata, Map context = [:]) {
     if (!selectedMacs().contains(mac) || !(state.discovered ?: [:])[mac]) return
     enqueueRead('shadow', mac, thermostatPath(mac), context)
-    enqueueRead('rooms', mac, thermostatPath(mac, 1) + '/group/0/rooms', context)
+    if (metadata || !((state.cache ?: [:])[mac]?.unsupported ?: []).contains('rooms'))
+        enqueueRead('rooms', mac, thermostatPath(mac, 1) + '/group/0/rooms', context)
     if (metadata) {
         enqueueRead('configuration', mac, thermostatPath(mac) + '/configuration', context)
         enqueueRead('priority', mac, thermostatPath(mac, 1) + '/priority', context)

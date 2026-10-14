@@ -7,6 +7,8 @@ class FakeApp {
     void updateSetting(String name, Map value) { settings[name] = value.type == 'bool' ? value.value.toString() == 'true' : value.value }
 }
 class FakeDevice {
+    String id = 'device-1'
+    List messages = []
     String deviceNetworkId = 'test'
     String displayName = 'Test device'
     String name = 'Test device'
@@ -31,12 +33,14 @@ class FakeDevice {
     boolean connectionActive() { active }
     long connectionGeneration() { cg }
     long accountGeneration() { ag }
+    List drainMessages() { List result = messages; messages = []; result }
     void openSocket(String url, long gen, long cgen) { calls << ['open', url, gen, cgen] }
     void connectionFailed(String reason) { calls << ['failed', reason] }
 }
 class FakeParent {
     List messages = []
-    void postMessage(Map msg) { messages << msg }
+    boolean gateHeld = false
+    void postMessage(Map msg) { if (gateHeld) throw new RuntimeException('Parent single-threaded gate is held'); messages << msg }
 }
 class FakeSocket {
     List sent = []
@@ -100,6 +104,7 @@ abstract class HubitatScript extends Script {
     List jobs = []
     List requests = []
     List subscriptions = []
+    List locationEvents = []
     List metadataCalls = []
     List logs = []
     Object log = [debug: { Object s -> logs << s }, info: { Object s -> logs << s }, warn: { Object s -> logs << s }, error: { Object s -> logs << s }]
@@ -108,12 +113,13 @@ abstract class HubitatScript extends Script {
     String getTemperatureScale() { location.temperatureScale }
     String getDataValue(String name) { device.getDataValue(name) }
     void sendEvent(Map event) { device.attributes[event.name] = event.value; device.events << event }
+    void sendLocationEvent(Map event) { locationEvents << event }
     List getChildDevices() { children.values().toList() }
     FakeDevice getChildDevice(String dni) { children[dni] }
     FakeDevice addChildDevice(String namespace, String type, String dni, Map options) {
         assert namespace == 'resideoHubitat'
         assert !children[dni]
-        def d = new FakeDevice(deviceNetworkId: dni, displayName: options.label, name: type, component: options.isComponent == true)
+        def d = new FakeDevice(id: 'device-' + (children.size() + 1), deviceNetworkId: dni, displayName: options.label, name: type, component: options.isComponent == true)
         children[dni] = d
         d
     }

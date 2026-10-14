@@ -1,4 +1,4 @@
-/* Resideo SignalR connection for Hubitat, v0.1.5. MIT; see LICENSE.upstream.
+/* Resideo SignalR connection for Hubitat, v0.1.6. MIT; see LICENSE.upstream.
  * Protocol adapted from sfcodes/ha-resideo 0e2947b (c) 2026 Semyon Fishman.
  */
 import groovy.json.JsonOutput
@@ -38,7 +38,7 @@ void driverDebug(String line) {
 }
 void traceStage(String reason = null) {
     driverDebug 'Resideo connection stage=' + state.stage + '; generation=' + connectionGeneration() + (reason ? '; reason=' + reason : '')
-    parent.postMessage(envelope('streamDiagnostic') + [stage: state.stage, reason: reason])
+    queueParentMessage(envelope('streamDiagnostic') + [stage: state.stage, reason: reason])
 }
 String failureCode(String reason) {
     ['WebSocket could not open': 'socketOpenFailed', 'WebSocket disconnected': 'socketDisconnected',
@@ -48,7 +48,7 @@ String failureCode(String reason) {
      'Renewing SignalR feed': 'feedRenewal', 'SignalR send failed': 'sendFailed',
      'SignalR setup timed out': 'setupTimeout', 'Negotiation failed': 'negotiationFailed'][reason] ?: 'transport'
 }
-void initialize() { stopConnection(); parent.postMessage([kind: 'streamInitialize', locationId: getDataValue('locationId')]) }
+void initialize() { stopConnection(); queueParentMessage([kind: 'streamInitialize', locationId: getDataValue('locationId')]) }
 void refresh() { if (state.enabled) reconnect() }
 long connectionGeneration() { (state.connectionGeneration ?: 0L) as long }
 long accountGeneration() { (state.accountGeneration ?: 0L) as long }
@@ -77,7 +77,7 @@ void requestConnection() {
     unschedule('keepalive'); unschedule('setupTimeout'); unschedule('reconnect')
     try { interfaces.webSocket.close() } catch (Exception ignored) { }
     status('connecting')
-    parent.postMessage(envelope('streamRequest'))
+    queueParentMessage(envelope('streamRequest'))
     runIn(70, 'setupTimeout', [data: [generation: connectionGeneration()]])
 }
 void openSocket(String url, long ag, long cg) {
@@ -137,7 +137,7 @@ void handleFrame(Map frame) {
             state.stage = 'connected'; state.backoff = 1
             unschedule('setupTimeout')
             status('connected')
-            parent.postMessage(envelope('streamActivated'))
+            queueParentMessage(envelope('streamActivated'))
         }
         return
     }
@@ -149,7 +149,7 @@ void handleFrame(Map frame) {
         catch (Exception ignored) { event = null }
         if (!event) { traceStage('invalidNotification'); return }
         noteExpiry(event.Body?.SubscriptionExpiration?.toString())
-        parent.postMessage(envelope('streamEvent') + [event: event])
+        queueParentMessage(envelope('streamEvent') + [event: event])
     }
 }
 void noteExpiry(String value) {
@@ -193,10 +193,40 @@ void reconnect() { requestConnection() }
 Map envelope(String kind) { [kind: kind, locationId: getDataValue('locationId'), accountGeneration: accountGeneration(), connectionGeneration: connectionGeneration()] }
 void status(String value, Map details = [:]) {
     driverDebug 'Resideo connection status=' + value + '; generation=' + connectionGeneration() + (details.reason ? '; reason=' + details.reason + '; retrySeconds=' + details.retrySeconds : '')
-    applyAttributes([connectionStatus: value]); parent.postMessage(envelope('streamStatus') + [status: value] + details)
+    applyAttributes([connectionStatus: value]); queueParentMessage(envelope('streamStatus') + [status: value] + details)
 }
 void applyAttributes(Map values) {
     values.findAll { k, v -> k in ['connectionStatus', 'dataStatus'] && v != null }.each { k, v ->
         if (device.currentValue(k.toString()) != v) sendEvent(name: k, value: v)
     }
+}
+
+
+// Notify the app through a native location event. Only the child ID is public;
+// message bodies stay in this driver's bounded, private outbox until drained.
+// A driver must never call a single-threaded parent while holding its own gate.
+void queueParentMessage(Map message) {
+    Map packet = [accountGeneration: (getDataValue('accountGeneration') ?: 0L) as long] + message
+    List outbox = state.bridgeOutbox ?: []
+    int bytes = groovy.json.JsonOutput.toJson(packet).length()
+    int used = (state.bridgeBytes ?: 0) as int
+    if (outbox.size() < 64 && used + bytes <= 262144) {
+        outbox << packet; state.bridgeOutbox = outbox; state.bridgeBytes = used + bytes
+    } else {
+        if (!state.bridgeOverflow) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
+        state.bridgeOverflow = true
+        if (message.kind == 'command') sendEvent(name: 'commandStatus', value: 'failed')
+    }
+    String owner = getDataValue('appId')
+    if (owner) sendLocationEvent(name: 'resideoBridge-' + owner, value: device.id.toString(), isStateChange: true)
+}
+List drainMessages() {
+    List outbox = state.bridgeOutbox ?: []
+    state.bridgeOutbox = []; state.bridgeBytes = 0
+    if (state.bridgeOverflow) {
+        state.bridgeOverflow = false
+        outbox << [kind: 'bridgeOverflow', accountGeneration: (getDataValue('accountGeneration') ?: 0L) as long,
+            mac: getDataValue('mac'), locationId: getDataValue('locationId')]
+    }
+    outbox
 }

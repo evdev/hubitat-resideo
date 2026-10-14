@@ -1,4 +1,4 @@
-/* Resideo room sensor for Hubitat, v0.1.5. MIT; see LICENSE.upstream. */
+/* Resideo room sensor for Hubitat, v0.1.6. MIT; see LICENSE.upstream. */
 metadata {
     definition(name: 'Resideo Room Sensor', namespace: 'resideoHubitat', author: 'Ephrayim (evdev)', singleThreaded: true) {
         capability 'Sensor'
@@ -54,14 +54,14 @@ void driverDebug(String line) {
 void parse(String ignored) { }
 void refresh() {
     driverDebug 'Resideo sensor refresh requested'
-    parent.postMessage([kind: 'refresh', mac: getDataValue('mac')])
+    queueParentMessage([kind: 'refresh', mac: getDataValue('mac')])
 }
 void setOccupancySensitivity(String value) { dispatch('setOccupancySensitivity', [value]) }
 void setExcludeMotion(String value) { dispatch('setExcludeMotion', [value]) }
 void setExcludeTemperature(String value) { dispatch('setExcludeTemperature', [value]) }
 void dispatch(String command, List args) {
     driverDebug 'Resideo sensor command forwarded; argumentCount=' + args.size()
-    parent.postMessage([kind: 'command', mac: getDataValue('mac'), accessoryId: getDataValue('accessoryId'), command: command, args: args])
+    queueParentMessage([kind: 'command', mac: getDataValue('mac'), accessoryId: getDataValue('accessoryId'), command: command, args: args])
 }
 void applySnapshot(Map values) {
     (state.projectedAttributes ?: []).findAll { !values.containsKey(it) }.each { device.deleteCurrentState(it.toString()) }
@@ -82,4 +82,34 @@ void applyAttributes(Map values) {
         changed++
     }
     if (changed) driverDebug 'Resideo sensor attributes updated; count=' + changed
+}
+
+
+// Notify the app through a native location event. Only the child ID is public;
+// message bodies stay in this driver's bounded, private outbox until drained.
+// A driver must never call a single-threaded parent while holding its own gate.
+void queueParentMessage(Map message) {
+    Map packet = [accountGeneration: (getDataValue('accountGeneration') ?: 0L) as long] + message
+    List outbox = state.bridgeOutbox ?: []
+    int bytes = groovy.json.JsonOutput.toJson(packet).length()
+    int used = (state.bridgeBytes ?: 0) as int
+    if (outbox.size() < 64 && used + bytes <= 262144) {
+        outbox << packet; state.bridgeOutbox = outbox; state.bridgeBytes = used + bytes
+    } else {
+        if (!state.bridgeOverflow) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
+        state.bridgeOverflow = true
+        if (message.kind == 'command') sendEvent(name: 'commandStatus', value: 'failed')
+    }
+    String owner = getDataValue('appId')
+    if (owner) sendLocationEvent(name: 'resideoBridge-' + owner, value: device.id.toString(), isStateChange: true)
+}
+List drainMessages() {
+    List outbox = state.bridgeOutbox ?: []
+    state.bridgeOutbox = []; state.bridgeBytes = 0
+    if (state.bridgeOverflow) {
+        state.bridgeOverflow = false
+        outbox << [kind: 'bridgeOverflow', accountGeneration: (getDataValue('accountGeneration') ?: 0L) as long,
+            mac: getDataValue('mac'), locationId: getDataValue('locationId')]
+    }
+    outbox
 }

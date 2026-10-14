@@ -4,7 +4,7 @@
 
 The deployment unit is one app and three standalone driver scripts. Each is compatible with Groovy 2.4 syntax and defines no custom classes or runtime library dependencies. The app owns HTTP requests and tokens; connection drivers use Hubitat's WebSocket interface. Thermostat and sensor drivers are thin command/event adapters.
 
-All components declare `singleThreaded: true`. Child-to-parent entrypoints schedule message envelopes with `overwrite: false`; shared state changes occur inside the app's serialized handlers. HTTP callbacks join the same processing path. Account generation identifiers reject previous-session responses; connection generation identifiers reject obsolete negotiation and stream messages.
+All components declare `singleThreaded: true`. Drivers emit native location events containing only their child ID. Message envelopes remain in a bounded private driver outbox until the app's event handler drains them. Drivers never synchronously call their single-threaded parent, avoiding circular parent/driver gate acquisition. Shared state changes occur inside the app's serialized handlers. HTTP callbacks join the same processing path. Account generation identifiers reject previous-session responses; connection generation identifiers reject obsolete negotiation and stream messages.
 
 ## HTTP and credentials
 
@@ -49,3 +49,5 @@ The exact baseline and original license are recorded in the repository. Sanitize
 ### Cookie-header fallback during sign-in
 
 Most HTTP work remains asynchronous. Some hubs flatten duplicate Set-Cookie headers in AsyncResponse, which can omit Auth0's CSRF/session cookies. If a login page lacks CSRF or enters a bounded redirect loop, setup restarts its temporary cookie session once using native HTTP for the cookie-bearing authorization, login-page, callback and resume steps. Each native request runs in its own scheduled callback with a ten-second timeout. Credential submission, token exchange, refresh and all device API requests stay asynchronous. Full native header iteration retains duplicates, the same HTTPS host guards apply, and cancellation clears temporary wire/cookie data. No extra server, runtime library or custom thread is used.
+
+Driver outboxes hold at most 64 messages and 262144 serialized characters. Overflow signals a REST resynchronization; an additional command that cannot be queued is visibly failed, rather than silently replayed. Native bridge events carry no message payload, credentials or stream URLs. Negotiation, activation and eligible foreground writes take priority over background reads while retaining per-thermostat write serialization and the shared two-request limit. Optional rooms endpoints known to be unsupported are retried on explicit/metadata refresh, rather than every ordinary poll.

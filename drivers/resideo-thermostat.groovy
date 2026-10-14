@@ -1,4 +1,4 @@
-/* Resideo thermostat for Hubitat, v0.1.5. MIT; see LICENSE.upstream. */
+/* Resideo thermostat for Hubitat, v0.1.6. MIT; see LICENSE.upstream. */
 metadata {
     definition(name: 'Resideo Thermostat', namespace: 'resideoHubitat', author: 'Ephrayim (evdev)', singleThreaded: true) {
         capability 'Actuator'
@@ -111,7 +111,7 @@ void driverDebug(String line) {
 void parse(String ignored) { }
 void refresh() {
     driverDebug 'Resideo thermostat refresh requested'
-    parent.postMessage([kind: 'refresh', mac: getDataValue('mac')])
+    queueParentMessage([kind: 'refresh', mac: getDataValue('mac')])
 }
 void auto() { setThermostatMode('auto') }
 void cool() { setThermostatMode('cool') }
@@ -140,11 +140,11 @@ void setFreezeProtectionLowLimit(value) { dispatch('setFreezeProtectionLowLimit'
 void setSchedule(value) { rejectLocal('setSchedule', 'Schedule editing is not supported. Use the First Alert app.') }
 void rejectLocal(String command, String reason) {
     applyAttributes([commandStatus: 'rejected', lastCommandError: reason])
-    parent.postMessage([kind: 'driverRejected', mac: getDataValue('mac'), command: command])
+    queueParentMessage([kind: 'driverRejected', mac: getDataValue('mac'), command: command])
 }
 void dispatch(String command, List args) {
     driverDebug 'Resideo thermostat command forwarded; argumentCount=' + args.size()
-    parent.postMessage([kind: 'command', mac: getDataValue('mac'), command: command, args: args])
+    queueParentMessage([kind: 'command', mac: getDataValue('mac'), command: command, args: args])
 }
 void applySnapshot(Map values) {
     (state.projectedAttributes ?: []).findAll { !values.containsKey(it) && it != 'thermostatSetpoint' }.each { device.deleteCurrentState(it.toString()) }
@@ -166,4 +166,34 @@ void applyAttributes(Map values) {
         changed++
     }
     if (changed) driverDebug 'Resideo thermostat attributes updated; count=' + changed
+}
+
+
+// Notify the app through a native location event. Only the child ID is public;
+// message bodies stay in this driver's bounded, private outbox until drained.
+// A driver must never call a single-threaded parent while holding its own gate.
+void queueParentMessage(Map message) {
+    Map packet = [accountGeneration: (getDataValue('accountGeneration') ?: 0L) as long] + message
+    List outbox = state.bridgeOutbox ?: []
+    int bytes = groovy.json.JsonOutput.toJson(packet).length()
+    int used = (state.bridgeBytes ?: 0) as int
+    if (outbox.size() < 64 && used + bytes <= 262144) {
+        outbox << packet; state.bridgeOutbox = outbox; state.bridgeBytes = used + bytes
+    } else {
+        if (!state.bridgeOverflow) log.warn 'Resideo driver message queue is full; a state refresh will be requested.'
+        state.bridgeOverflow = true
+        if (message.kind == 'command') sendEvent(name: 'commandStatus', value: 'failed')
+    }
+    String owner = getDataValue('appId')
+    if (owner) sendLocationEvent(name: 'resideoBridge-' + owner, value: device.id.toString(), isStateChange: true)
+}
+List drainMessages() {
+    List outbox = state.bridgeOutbox ?: []
+    state.bridgeOutbox = []; state.bridgeBytes = 0
+    if (state.bridgeOverflow) {
+        state.bridgeOverflow = false
+        outbox << [kind: 'bridgeOverflow', accountGeneration: (getDataValue('accountGeneration') ?: 0L) as long,
+            mac: getDataValue('mac'), locationId: getDataValue('locationId')]
+    }
+    outbox
 }

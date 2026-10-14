@@ -58,3 +58,7 @@ Physical-hub testing showed that sign-in button callbacks can see settings befor
 ## Browser handoff lifetime — v0.1.5
 
 Live attempts expired during the browser-to-hub handoff. The pending browser setup request now lasts one hour and shows a local deadline and remaining minutes. Password setup remains limited to 15 minutes; HTTP timeouts, forced fresh login, state/PKCE checks and Resideo’s callback-code expiration are unchanged. Additional safe logs record queued/processed form actions and input-presence counts, without input values. The suite has 89 passing groups.
+
+## Single-threaded parent/driver gates — v0.1.6
+
+Physical-hub initialization exposed circular gate acquisition when a parent-driven connection method called back into the single-threaded app. Native location events now announce only the child ID; the app drains bounded private outboxes in its own event context. All three drivers retain serialized execution and never call the parent synchronously. Regressions model a held parent gate, owned-child routing, stale generations, bounded overflow, negotiation priority, saved device-selection/removal input, and skipped ordinary polls for unsupported rooms. The suite has 94 passing groups.
