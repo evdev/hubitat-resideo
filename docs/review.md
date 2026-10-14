@@ -30,3 +30,7 @@ A subsequent logging pass expanded the suite to **67 passing test groups**. Stat
 Authentication steps, token refresh results, HTTP timing/status/retries, queue sizes, SignalR stages and safe failure reasons, polling/availability changes, and accepted/confirmed/failed/unconfirmed commands now have diagnostic events. Debug command comparisons retain only validated settings and hub temperature units. Exports include a 60-event history, counters, shared cooldown, stream status, and pending/deferred command counts. History and counters can be cleared independently of integration state.
 
 Tests inject credentials, cookies, authorization codes, token-bearing URLs, raw service errors, device identifiers/labels, and invalid command values to check their exclusion. Logging uses fixed event/field vocabularies and pseudonymous device/location references. Physical-hub logging behavior remains part of the pending live checks.
+
+## HPM packaging and physical-hub installation
+
+Added a package manifest for the primary app and three required drivers, plus an optional custom repository listing. Component IDs are stable, OAuth is disabled, and source URLs are pinned to the version tag. The HPM contract check expanded the suite to **68 passing groups**. On 2026-10-14, HPM v1.9.13 successfully installed v0.1.0 on the user-provided hub and recorded all four compiled components. The account setup page opened; account and hardware acceptance checks remain in progress.

@@ -28,13 +28,17 @@ Coverage includes:
 
 The simulation is not a live 24-hour soak and the fake runtime does not enforce every Hubitat sandbox rule. See the final test output for the current number of passing test groups.
 
-## Live checks — not yet performed
+## Live installation and remaining checks
 
-Live validation is deferred until the user logs the agent into the hub browser. No hub address, firmware version, thermostat model, or live First Alert account was supplied during local implementation. Record these before changing release status:
+On **2026-10-14**, browser access was provided and **Hubitat Package Manager v1.9.13** installed package **v0.1.0**. HPM's managed inventory confirmed the integration app and all three drivers, and the integration's account setup page opened successfully. The repository was made public with explicit user approval so HPM could download its manifest and versioned source URLs. Each downloaded file was checked against the tested local source before installation.
+
+The user is completing First Alert authentication. No credentials, screenshots, hub addresses, or device state are included in this repository. Hub model/firmware and thermostat/sensor model/firmware remain to be recorded for hardware validation:
 
 | Check | Status |
 |---|---|
-| Compile all four scripts on the physical hub | Pending |
+| Compile all four scripts on the physical hub | Passed through HPM v1.9.13, 2026-10-14 |
+| HPM manages the app and all three drivers at v0.1.0 | Passed, 2026-10-14 |
+| Integration account setup page opens | Passed, 2026-10-14 |
 | Direct email/password sign-in | Pending |
 | Browser-assisted sign-in and token persistence | Pending |
 | Thermostat and room-sensor discovery / capability matching | Pending |
