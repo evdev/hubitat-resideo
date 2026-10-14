@@ -33,7 +33,7 @@ The simulation is not a live 24-hour soak and the fake runtime does not enforce 
 
 On **2026-10-14**, browser access was provided and **Hubitat Package Manager v1.9.13** installed package **v0.1.0**. HPM's managed inventory confirmed the integration app and all three drivers, and the integration's account setup page opened successfully. The repository was made public with explicit user approval so HPM could download its manifest and versioned source URLs. Each downloaded file was checked against the tested local source before installation.
 
-The user is completing First Alert authentication. No credentials, screenshots, hub addresses, or device state are included in this repository. Hub firmware is **2.5.2.134**. Hub model and thermostat/sensor models and firmware remain to be recorded for hardware validation:
+Browser-assisted First Alert authentication succeeded with v0.1.5. Token exchange and account discovery returned HTTP 200; saving/reinitializing and reopening the app retained authentication and a fresh account read succeeded. No credentials, screenshots, hub addresses, or device state are included in this repository. Hub firmware is **2.5.2.134**. Hub model and thermostat/sensor models and firmware remain to be recorded for hardware validation:
 
 | Check | Status |
 |---|---|
@@ -42,7 +42,8 @@ The user is completing First Alert authentication. No credentials, screenshots, 
 | Integration account setup page opens | Passed, 2026-10-14 |
 | v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
 | Direct email/password sign-in | Pending |
-| Browser-assisted sign-in and token persistence | Pending |
+| Browser-assisted sign-in and token persistence | Passed: token exchange and save/reopen without signing in again, 2026-10-14 |
+| Account-level thermostat discovery | Passed: authenticated accounts API returned thermostats |
 | Thermostat and room-sensor discovery / capability matching | Pending |
 | Standard dashboard thermostat controls | Pending |
 | Rule Machine standard and custom commands | Pending |
@@ -51,7 +52,7 @@ The user is completing First Alert authentication. No credentials, screenshots, 
 | Stream loss → polling → restored push | Pending |
 | Hub restart restores operation without sign-in | Pending |
 | Live 24-hour token/feed renewal soak | Pending |
-| Live diagnostic/log inspection for secrets | Pending |
+| Live diagnostic/log inspection for secrets | Passed for authentication and account discovery; device/stream inspection pending |
 
 ## Procedure
 
@@ -66,6 +67,6 @@ The user is completing First Alert authentication. No credentials, screenshots, 
 
 Do not mark a hardware/firmware combination validated until these checks have been observed on that combination. Do not infer broader model support from fixture tests.
 
-Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat behaviors: login buttons execute before submitted inputs are saved, and HTTP header values can include the header name or collapse repeated cookies. Version 0.1.4 saves inputs before scheduled sign-in actions, normalizes header values, and requests all native response headers. Highlighted status banners appear beside each login action and the connection check. The corrected native-header fallback passed the physical-hub connection check with all five cookies and CSRF present. Fresh credential acceptance remains pending; no live account success is inferred from the offline suite.
+Live troubleshooting on firmware 2.5.2.134 reproduced two additional Hubitat behaviors: login buttons execute before submitted inputs are saved, and HTTP header values can include the header name or collapse repeated cookies. Version 0.1.4 saves inputs before scheduled sign-in actions, normalizes header values, and requests all native response headers. Highlighted status banners appear beside each login action and the connection check. The corrected native-header fallback passed the physical-hub connection check with all five cookies and CSRF present. Browser credential acceptance was subsequently verified with the v0.1.5 live token exchange; direct password sign-in remains pending.
 
-Two browser handoffs exceeded the original 15-minute setup-attempt lifetime. Their callbacks were correctly rejected as expired; no token exchange occurred. Version 0.1.5 extends only the pending browser setup request to one hour and displays its deadline. Fresh-login parameters and Auth0’s authorization-code lifetime are unchanged. Account authentication remains unverified until a fresh callback completes token exchange.
+Two browser handoffs exceeded the original 15-minute setup-attempt lifetime. Their callbacks were correctly rejected as expired; no token exchange occurred. Version 0.1.5 extends only the pending browser setup request to one hour and displays its deadline. Fresh-login parameters and Auth0’s authorization-code lifetime are unchanged. A subsequent fresh callback completed token exchange and authenticated account discovery successfully with v0.1.5.
