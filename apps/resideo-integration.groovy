@@ -495,7 +495,10 @@ void performCookieAuth(Map ctx) {
 }
 Map nativeAuthHeaders(resp) {
     Map out = [:]
-    def headers = resp.getHeaders()
+    def headers
+    // getHeaders() on Hubitat's decorator can itself be a flattened Map.
+    // The HTTP response's getAllHeaders() retains repeated Set-Cookie fields.
+    try { headers = resp.getAllHeaders() } catch (Exception ignored) { headers = resp.getHeaders() }
     if (headers instanceof Map) {
         for (entry in headers.entrySet()) if (entry.key != null) out[entry.key.toString()] = entry.value
     } else {

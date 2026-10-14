@@ -73,6 +73,7 @@ class FakeNativeResponse {
     int status
     List headers = []
     int getStatus() { status }
+    Object getAllHeaders() { headers as Object[] }
     Object getHeaders() { headers }
 }
 class FakeAtomicState {
