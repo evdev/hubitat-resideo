@@ -38,7 +38,7 @@ The user is completing First Alert authentication. No credentials, screenshots, 
 | Check | Status |
 |---|---|
 | Compile all four scripts on the physical hub | Passed through HPM v1.9.13, 2026-10-14 |
-| HPM manages the app and all three drivers at v0.1.0 | Passed, 2026-10-14 |
+| HPM manages the app and all three drivers at v0.1.4 | Passed: HPM update completion, 2026-10-14 |
 | Integration account setup page opens | Passed, 2026-10-14 |
 | v0.1.4 app compilation, highlighted status and password-free sign-in connection check | Passed on firmware 2.5.2.134: all five cookies and CSRF present |
 | Direct email/password sign-in | Pending |
