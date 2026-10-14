@@ -1654,7 +1654,22 @@ Map responseHeaders(resp) {
 List headerValues(Map headers, String name) {
     List out = []
     for (entry in headers.entrySet()) {
-        if (entry.key != null && entry.key.toString().equalsIgnoreCase(name)) out.addAll(asList(entry.value))
+        if (entry.key != null && entry.key.toString().equalsIgnoreCase(name)) {
+            asList(entry.value).each { value ->
+                if (value != null) {
+                    def actual = value
+                    // Hubitat can expose Apache Header objects in its Map.
+                    // Header.toString() includes "Name: ", which is not part
+                    // of a redirect URL or cookie. Read the value instead.
+                    if (!(value instanceof CharSequence) && !(value instanceof Number)) {
+                        try { if (value.value != null) actual = value.value } catch (Exception ignored) { }
+                    }
+                    String text = actual.toString()
+                    if (text.regionMatches(true, 0, name + ':', 0, name.length() + 1)) text = text.substring(name.length() + 1).trim()
+                    out << text
+                }
+            }
+        }
     }
     out
 }

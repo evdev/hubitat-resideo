@@ -992,4 +992,11 @@ test('Authentication fields save on blur and status appears next to each action'
     s.state.lastError = null; s.state.authStatus = 'Connection check passed. Ready to sign in.'
     assert !s.authenticationBanner().contains('Account connected')
 }
+test('Apache header values and header-prefixed strings normalize before auth parsing') {
+    def s = app()
+    Map headers = [Location: [name: 'Location', value: '/login?state=private'], 'Set-Cookie': [[name: 'Set-Cookie', value: 'auth0_compat=session; Path=/'], 'Set-Cookie: _csrf=csrf; Path=/']]
+    assert s.headerValue(headers, 'Location') == '/login?state=private'
+    assert s.collectCookies([:], headers) == [auth0_compat: 'session', _csrf: 'csrf']
+    assert s.headerValue([Location: 'Location: https://login.resideo.com/login?state=private'], 'Location').startsWith('https://')
+}
 println('Passed ' + passed + ' test groups using Groovy ' + GroovySystem.version)
