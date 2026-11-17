@@ -26,6 +26,8 @@ These URLs must be publicly accessible to the hub. A private GitHub repository i
 
 For HPM-managed installations, update or repair through HPM and then open the integration and select **Done**. Do not manually replace or remove HPM-managed code.
 
+For **v0.1.12**, use **HPM → Update** to update Resideo Thermostats Integration, then open the existing integration app. To enable password-based recovery, turn on **Save password on this hub for automatic sign-in**, enter your First Alert email/password, and sign in successfully once before selecting **Done**. The option is off by default; the app continues using refresh tokens when no password is saved. Existing child devices and their IDs are retained.
+
 ## Add code manually
 
 1. Open the hub's local administration interface.

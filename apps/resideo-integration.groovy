@@ -1,5 +1,5 @@
 /*
- * Resideo Integration for Hubitat, v0.1.11
+ * Resideo Integration for Hubitat, v0.1.12
  * Based on sfcodes/ha-resideo 0e2947b8ad83608ccf212dd2638f2aa3eda06eaa.
  * Portions copyright (c) 2026 Semyon Fishman. MIT; see LICENSE.upstream.
  */
@@ -25,7 +25,7 @@ Map constants() {
      browserClient: 'eyJuYW1lIjoiYXV0aDAuanMtdWxwIiwidmVyc2lvbiI6IjkuMTMuMiJ9',
      webUA: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
      appUA: 'First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0',
-     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.11']
+     root: '/ris-public-api/api', channel: 'ds-notification-service', version: '0.1.12']
 }
 
 def mainPage() {
