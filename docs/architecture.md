@@ -6,6 +6,14 @@ The deployment unit is one app and three standalone driver scripts. Each is comp
 
 All components declare `singleThreaded: true`. Drivers emit native location events containing only their child ID. Message envelopes remain in a bounded private driver outbox until the app's event handler drains them. Drivers never synchronously call their single-threaded parent, avoiding circular parent/driver gate acquisition. Shared state changes occur inside the app's serialized handlers. HTTP callbacks join the same processing path. Account generation identifiers reject previous-session responses; connection generation identifiers reject obsolete negotiation and stream messages.
 
+## HPM catalog and release publishing
+
+The approved HPM author entry is `evdev` in [HubitatCommunity's repository list](https://github.com/HubitatCommunity/hubitat-packagerepositories/blob/master/repositories.json). It points to [hubitat-modern-dashboard/hubitat/repository.json](https://github.com/evdev/hubitat-modern-dashboard/blob/master/hubitat/repository.json), which lists all evdev packages. New integrations must be added to that existing catalog. A standalone `repository.json` in a new project does not register it with the standard HPM catalog, and no additional global-catalog approval is needed when adding a package to the already registered author catalog.
+
+Resideo's stable catalog ID is `e8abccd2-7957-5651-8005-843ba39d4cb9`, and its manifest URL is `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json`. Keep the standalone listing in this repository consistent with the approved author entry. Preserve existing app/driver IDs and names/namespaces so HPM can recognize installed code.
+
+For each release, update the package manifest's version, date, notes and pinned source URLs; tag the tested revision and verify its public downloads before exposing the new manifest on `main`. Verify the complete public lookup chain: standard HPM list → approved evdev catalog → Resideo manifest → tagged source files. Existing catalog entries keep their manifest URL across version updates; adding a new package requires updating the approved author catalog. Publish the GitHub release after those checks. Already managed packages use HPM Update; manually installed code must be matched through HPM Match Up first.
+
 ## HTTP and credentials
 
 The app limits active API requests to two, coalesces reads, and serializes writes per thermostat. Write bodies are constructed at dispatch, allowing later sensor edits to include already accepted pending settings. The authentication request chain has its own single-flight gate.

@@ -6,7 +6,7 @@ Native Hubitat app and drivers for thermostats registered in the **First Alert**
 
 ## Install
 
-Follow [INSTALL.md](INSTALL.md). In **Hubitat Package Manager → Install → From a URL**, enter `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json`. HPM installs the app and all three drivers and can open the account setup page. The app creates the device children after authentication and selection. Manual installation is also documented.
+The package is listed in the existing approved **evdev** HPM catalog. In **Hubitat Package Manager → Install → Browse by Tags → Climate Control**, select **Resideo Thermostats Integration**. No custom repository is required. Existing HPM-managed installations use **Update**; manually installed code can use **Match Up** first. HPM manages the app and all three drivers. See [INSTALL.md](INSTALL.md) for setup and advanced URL/manual installation.
 
 ## Included
 

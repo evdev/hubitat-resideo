@@ -13,18 +13,20 @@ No inbound port, Hubitat OAuth callback, developer.honeywellhome.com account, br
 
 ## Install with Hubitat Package Manager (recommended)
 
-The package includes the integration app and all three required drivers. HPM downloads versioned source files so all four components are installed from the same revision.
+The package includes the integration app and all three required drivers. HPM downloads versioned source files so all four components are installed from the same revision. It is listed in the existing approved **evdev** catalog; no custom repository needs to be added.
 
-1. Open **Hubitat Package Manager → Install → From a URL**.
-2. Enter `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json` and choose **Next**.
+1. Open **Hubitat Package Manager → Install → Browse by Tags → Climate Control**.
+2. Select **Resideo Thermostats Integration** by **Ephrayim (evdev)** and choose **Next**.
 3. Review the package and MIT license, leave **Configure the installed package after installation completes** enabled, and finish installation.
 4. HPM opens **Resideo Thermostats Integration**. Authenticate using one of the methods below, then select your thermostats.
 
-To make the package available when browsing custom repositories, use **HPM → Package Manager Settings → Add a Custom Repository** with `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/repository.json`. Listing in the community's global catalog is a separate step and is not required for URL installation.
+HPM already registers the [evdev author catalog](https://github.com/evdev/hubitat-modern-dashboard/blob/master/hubitat/repository.json) in its [standard repository list](https://github.com/HubitatCommunity/hubitat-packagerepositories/blob/master/repositories.json). Resideo is listed there alongside the other evdev packages. Keyword search may take time to reflect catalog changes; **Browse by Tags** refreshes the repository listings directly.
+
+Advanced URL installation remains available through **Install → From a URL** using `https://raw.githubusercontent.com/evdev/hubitat-resideo/main/packageManifest.json`. The standalone `repository.json` in this repository is optional.
 
 These URLs must be publicly accessible to the hub. A private GitHub repository is not downloadable by HPM's normal URL installer. No GitHub token is embedded in the package URLs.
 
-For HPM-managed installations, update or repair through HPM and then open the integration and select **Done**. Do not manually replace or remove HPM-managed code.
+For HPM-managed installations, use **HPM → Update**, then open the integration and select **Done**. If the existing app/drivers were installed manually and are absent from HPM’s managed packages, use **Match Up** first, then **Update**. Existing package and component identities are unchanged. Do not manually replace or remove HPM-managed code.
 
 For **v0.1.12**, use **HPM → Update** to update Resideo Thermostats Integration, then open the existing integration app. To enable password-based recovery, turn on **Save password on this hub for automatic sign-in**, enter your First Alert email/password, and sign in successfully once before selecting **Done**. The option is off by default; the app continues using refresh tokens when no password is saved. Existing child devices and their IDs are retained.
 
