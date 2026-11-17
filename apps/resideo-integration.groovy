@@ -31,6 +31,7 @@ Map constants() {
 def mainPage() {
     migrateAppPresentation()
     migrateCloudError()
+    configureSavedPassword()
     Map pageOptions = [name: 'mainPage', title: 'Resideo Thermostats Integration', install: true, uninstall: true]
     if (state.authUiAction || (state.authRequest && state.authRequest.step != 'refresh')) pageOptions.refreshInterval = 3
     else if (accountDiscoveryPending()) pageOptions.refreshInterval = ((state.cooldownUntil ?: 0L) as long) > now() ? 30 : 3
@@ -38,7 +39,11 @@ def mainPage() {
         section('Account') {
             paragraph authenticationBanner()
             input 'loginEmail', 'text', title: 'First Alert email', required: false, submitOnChange: true
-            input 'loginPassword', 'password', title: 'Password (cleared after sign-in)', required: false, submitOnChange: true
+            input 'loginPassword', 'password', title: savedPasswordAvailable() ? 'Password (leave blank to use the saved password)' : 'Password (cleared after sign-in)', required: false, submitOnChange: true
+            input 'rememberPassword', 'bool', title: 'Save password on this hub for automatic sign-in', defaultValue: false, submitOnChange: true
+            paragraph 'Optional: after a successful email/password sign-in, your password is stored on this hub in readable form. Hub administrators and backups can access it. Keep your hub, local network, and backups secure. Turning this option off deletes the saved password from the app.'
+            if (savedPasswordAvailable()) paragraph 'A password is saved for automatic sign-in. Enter a new password above and sign in to replace it.'
+            else if (settings.rememberPassword == true) paragraph 'Enter your email and password and sign in once to save them. Browser sign-in does not save a password.'
             paragraph 'After clicking, allow several seconds while the hub signs in to First Alert. This page refreshes automatically. Wait for a green Account connected message or a red error before trying again.'
             input 'signIn', 'button', title: 'Sign in with email and password'
             paragraph authenticationBanner()
@@ -140,9 +145,12 @@ void clearCloudError(Map request) {
 
 void installed() { initialize() }
 void updated() {
+    configureSavedPassword()
     // Saving preferences must not erase a browser verifier or invalidate an
     // asynchronous password login that is still in progress.
     if (enabled() && signInInProgress()) { configureLogging(); scheduleLoginExpiry(); return }
+    // Preserve the in-flight renewal and its callback when preferences are saved.
+    if (enabled() && state.refreshing) { state.initializeAfterRefresh = true; configureLogging(); return }
     initialize()
 }
 boolean signInInProgress() {
@@ -185,7 +193,8 @@ boolean debugLogging() {
 Map diagnosticLevels() {
     [initialized: 'info', debugDisabled: 'info', authUiQueued: 'debug', authUiProcessed: 'debug', authStarted: 'info', authConnected: 'info', authRequest: 'debug', authResponse: 'debug', authCookies: 'debug', authRedirect: 'debug', authCookieFallback: 'info', authConnectionReady: 'info',
      authFailure: 'warn', reauthRequired: 'warn', tokenRefreshStarted: 'debug', tokenRefreshSucceeded: 'info',
-     tokenRefreshRateLimited: 'warn', requestSent: 'debug', requestCompleted: 'debug', requestFailed: 'warn',
+     tokenRefreshRateLimited: 'warn', tokenRefreshRetry: 'warn', tokenRefreshRecovery: 'info',
+     automaticSignInStarted: 'info', automaticSignInRetry: 'warn', automaticSignInBlocked: 'warn', connectionSetupRetry: 'warn', requestSent: 'debug', requestCompleted: 'debug', requestFailed: 'warn',
      requestRetry: 'debug', rateLimited: 'warn', queueFull: 'warn', staleCallback: 'debug', supersededRead: 'debug',
      invalidResponse: 'warn', endpointUnsupported: 'info', discovered: 'info', deviceCreated: 'info',
      fallbackPoll: 'debug', streamStatus: 'info', streamFailure: 'warn', streamStage: 'debug', feedRenewal: 'debug',
@@ -291,6 +300,7 @@ String authFailureReason(String message) {
 void initialize() {
     migrateAppPresentation()
     migrateCloudError()
+    configureSavedPassword()
     boolean interruptedRefresh = state.refreshing == true
     stopIntegration(false)
     state.cache = state.cache ?: [:]
@@ -299,17 +309,28 @@ void initialize() {
     state.streams = [:]
     state.lastCommand = state.lastCommand ?: [:]
     clearLogin()
-    if (interruptedRefresh) requireReauth('The hub restarted during token refresh. Sign in again.')
+    // A restart cannot tell us whether the server consumed the previous grant.
+    // Recover with the latest saved token; only the server can reject it.
+    if (interruptedRefresh && state.tokens?.refresh_token) {
+        state.tokens = state.tokens + [expiresAt: 0L]
+        atomicState.tokens = state.tokens
+        diagnostic('tokenRefreshRecovery')
+    }
     configureLogging()
     diagnostic('initialized', [generation: generation(), status: enabled() ? 'connecting' : 'disabled', count: selectedMacs().size()])
     subscribe(location, 'systemStart', 'systemStart')
     subscribe(location, 'resideoBridge-' + app.id, 'childMessage')
     if (enabled() && state.tokens?.refresh_token) {
-        state.authStatus = 'Connected'
+        state.lastError = null
+        state.authStatus = freshToken() ? 'Connected' : 'Reconnecting automatically'
         scheduleTokenRefresh()
         enqueueRead('accounts', null, '/ris-public-api/api/v1/accounts', [:])
         synchronizeSelection()
         if (state.pending) runIn(10, 'reconcileCommands')
+        runIn(60, 'maintenance')
+    } else if (enabled() && savedPasswordAvailable() && !state.passwordLoginBlocked) {
+        state.lastError = null; state.authStatus = 'Reconnecting automatically'
+        runIn(1, 'automaticSignIn')
         runIn(60, 'maintenance')
     }
 }
@@ -327,10 +348,12 @@ void stopIntegration(boolean deleting) {
     state.inFlight = [:]
     state.writeBusy = [:]
     state.refreshing = false
+    atomicState.refreshing = false
+    state.initializeAfterRefresh = false
     state.authRequest = null
     getChildDevices().findAll { it.getDataValue('kind') == 'connection' }.each { it.stopConnection() }
     clearLogin()
-    if (deleting) { state.tokens = null; state.pending = [:] }
+    if (deleting) { state.tokens = null; atomicState.tokens = null; forgetSavedPassword(); state.pending = [:] }
     if (!enabled()) getChildDevices().each { it.applyAttributes([connectionStatus: 'disabled', dataStatus: 'unavailable']) }
 }
 
@@ -339,7 +362,10 @@ void appButtonHandler(String name) {
         case 'signIn': scheduleAuthUiAction('password'); break
         case 'browserSignIn': startBrowserLogin(); break
         case 'finishBrowser': scheduleAuthUiAction('browser'); break
-        case 'cancelLogin': clearLogin(); state.lastError = null; state.authStatus = state.tokens ? 'Connected' : 'Sign-in cancelled'; break
+        case 'cancelLogin':
+            if (!state.tokens && savedPasswordAvailable()) state.passwordLoginBlocked = true
+            unschedule('automaticSignIn'); clearLogin(); state.lastError = null
+            state.authStatus = state.tokens ? 'Connected' : 'Sign-in cancelled'; break
         case 'discover': enqueueRead('accounts', null, constants().root + '/v1/accounts', [:]); break
         case 'applyDevices': runIn(1, 'applySavedDeviceSelection', [data: [generation: generation()]]); break
         case 'removeOrphans': runIn(1, 'removeSavedOrphans', [data: [generation: generation()]]); break
@@ -424,6 +450,7 @@ Map newAuthorization(String redirectUri = constants().redirect) {
 void scheduleAuthUiAction(String flow) {
     // Hubitat calls the button handler before persisting that button's form.
     // Defer reading settings; submitOnChange also saves fields on blur.
+    if (!state.refreshing && state.authRequest?.step == 'refresh') state.authRequest = null
     if (state.authRequest || state.authUiAction) return
     Map action = [id: randomToken(), generation: generation(), flow: flow]
     state.authUiAction = action
@@ -494,9 +521,54 @@ Map parseQuery(String url) {
     out
 }
 
-void startPasswordLogin() {
+boolean savedPasswordAvailable() {
+    settings.rememberPassword == true && state.savedCredentials?.email && state.savedCredentials?.password &&
+        settings.loginEmail?.toString()?.trim()?.equalsIgnoreCase(state.savedCredentials.email.toString())
+}
+void forgetSavedPassword() {
+    state.savedCredentials = null; atomicState.savedCredentials = null
+    state.passwordLoginRetryAt = null; state.passwordLoginFailures = 0
+    state.passwordRecoveryRetryAt = null; state.passwordRecoveredAt = null; state.passwordRecoveries = 0
+    unschedule('automaticSignIn')
+}
+void configureSavedPassword() {
+    if (settings.rememberPassword != true && state.savedCredentials) {
+        forgetSavedPassword()
+        if (state.loginAttempt?.automatic) {
+            unschedule('authTimeout'); clearLogin()
+            state.authStatus = state.tokens ? 'Connected' : 'Sign-in cancelled'
+        }
+    }
+}
+void automaticSignIn() {
+    configureSavedPassword()
+    if (!enabled() || state.tokens?.refresh_token || !savedPasswordAvailable() || state.passwordLoginBlocked) return
+    if (state.refreshing || state.authRequest || signInInProgress()) return
+    long retryAt = Math.max(Math.max((state.passwordLoginRetryAt ?: 0L) as long, (state.cooldownUntil ?: 0L) as long),
+        (state.passwordRecoveryRetryAt ?: 0L) as long)
+    if (retryAt > now()) {
+        runIn(Math.max(1, Math.ceil((retryAt - now()) / 1000.0d) as int), 'automaticSignIn'); return
+    }
+    startPasswordLogin(true)
+}
+void retryAutomaticSignIn(String reason, int status = 0, Map headers = [:]) {
+    unschedule('authTimeout'); clearLogin()
+    if (!enabled() || !savedPasswordAvailable() || state.passwordLoginBlocked) return
+    int failures = Math.min(5, ((state.passwordLoginFailures ?: 0) as int) + 1)
+    state.passwordLoginFailures = failures
+    int delay = status == 429 ? retryDelay(headers) : Math.min(900, 60 * (1 << (failures - 1)))
+    state.passwordLoginRetryAt = now() + delay * 1000L
+    if (status == 429) state.cooldownUntil = Math.max((state.cooldownUntil ?: 0L) as long, state.passwordLoginRetryAt as long)
+    state.lastError = null; state.authStatus = 'Reconnecting automatically'
+    diagnostic('automaticSignInRetry', [reason: reason, http: status, retrySeconds: delay])
+    runIn(delay, 'automaticSignIn')
+    runIn(60, 'maintenance')
+}
+void startPasswordLogin(boolean automatic = false) {
     if (state.refreshing) { state.lastError = 'Wait for token refresh to complete before signing in.'; return }
-    if (!settings.loginEmail || !settings.loginPassword) {
+    Map credentials = automatic ? (state.savedCredentials ?: [:]) :
+        [email: settings.loginEmail?.toString()?.trim(), password: settings.loginPassword ?: (savedPasswordAvailable() ? state.savedCredentials.password : null)]
+    if (!credentials.email || !credentials.password) {
         state.authStatus = 'Enter your sign-in details'; state.lastError = 'Enter your First Alert email and password.'
         diagnostic('authFailure', [flow: 'password', reason: 'missingInput']); return
     }
@@ -504,8 +576,9 @@ void startPasswordLogin() {
     state.lastError = null
     state.diagnostics = null
     Map a = newAuthorization()
-    state.loginAttempt = a + [cookies: [:]]
-    state.authStatus = 'Signing in'
+    state.loginAttempt = a + [cookies: [:], credentials: [:] + credentials, automatic: automatic]
+    state.authStatus = automatic ? 'Signing in automatically' : 'Signing in'
+    if (automatic) diagnostic('automaticSignInStarted')
     diagnostic('authStarted', [flow: 'password'])
     scheduleLoginExpiry()
     authHttp('authorize', 'GET', a.url as String, null, [:])
@@ -523,6 +596,7 @@ void testSignInConnection() {
     authHttp('authorize', 'GET', a.url as String, null, [:])
 }
 void expireLogin() {
+    if (state.loginAttempt?.automatic) { retryAutomaticSignIn('timeout'); return }
     diagnostic('authFailure', [reason: 'expired']); clearLogin()
     state.authStatus = state.tokens ? 'Connected; sign-in attempt expired' : 'Sign-in expired'
     state.lastError = 'Sign-in expired. Start again.'
@@ -532,7 +606,7 @@ void clearLogin(boolean clearPassword = true) {
     unschedule('performAuthUiAction')
     state.browserAttempt = null
     state.loginAttempt = null
-    if (state.authRequest?.step != 'refresh') state.authRequest = null
+    if (state.authRequest?.step != 'refresh' || !state.refreshing) state.authRequest = null
     if (clearPassword) app.removeSetting('loginPassword')
     app.removeSetting('browserRedirect')
     unschedule('expireLogin')
@@ -614,6 +688,9 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
     String step = req.step
     diagnostic('authResponse', [request: req.trace, step: step, http: status, elapsedMs: now() - ((req.sentAt ?: now()) as long)])
     Map a = state.loginAttempt ?: [:]
+    if (a.automatic && (status <= 0 || status == 408 || status == 429 || status >= 500)) {
+        retryAutomaticSignIn(status == 429 ? 'rateLimited' : status <= 0 ? 'transport' : 'cloudRejected', status, headers); return
+    }
     if (status <= 0) { authFailure('Transport error during authentication. Sign in again.', step == 'refresh'); return }
     try {
         if (a) {
@@ -653,8 +730,8 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
                 }
                 Map credentials = [client_id: c.client, redirect_uri: c.redirect, tenant: 'resideo-prod',
                     response_type: 'code', scope: c.scope, audience: c.audience, _csrf: a.cookies._csrf,
-                    state: a.authState, _intstate: 'deprecated', username: settings.loginEmail,
-                    password: settings.loginPassword, connection: 'Username-Password-Authentication']
+                    state: a.authState, _intstate: 'deprecated', username: a.credentials.email,
+                    password: a.credentials.password, connection: 'Username-Password-Authentication']
                 authHttp('credentials', 'POST', c.auth + '/usernamepassword/login', credentials,
                     ['Auth0-Client': c.browserClient, Origin: c.auth, 'Content-Type': 'application/json']); return
             case 'credentials':
@@ -678,13 +755,16 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
             case 'exchange':
             case 'refresh':
                 Map tokens = parseJsonMap(text)
+                String tokenError = (tokens.error ?: tokens.code ?: tokens.name ?: '').toString()
+                boolean verification = tokenError.toLowerCase().contains('captcha') || tokenError.toLowerCase().contains('mfa') || tokenError in ['blocked_user', 'too_many_attempts']
+                boolean configurationError = tokenError in ['invalid_client', 'unauthorized_client', 'unsupported_grant_type', 'invalid_request']
+                if (step == 'refresh' && status in [400, 401, 403] &&
+                    (status == 401 || verification || configurationError || tokenError in ['invalid_grant', 'invalid_refresh_token', 'invalid_token', 'access_denied'])) {
+                    requireReauth(authenticationError(tokens, step), !verification && !configurationError); return
+                }
                 if (status != 200 || !tokens.access_token || (step == 'exchange' && !tokens.refresh_token)) {
-                    if (step == 'refresh' && status == 429) {
-                        state.refreshing = false; state.authRequest = null
-                        atomicState.refreshing = false
-                        state.cooldownUntil = now() + retryDelay(headers) * 1000L
-                        diagnostic('tokenRefreshRateLimited', [http: status, retrySeconds: retryDelay(headers)])
-                        runIn(retryDelay(headers), 'refreshTokens'); return
+                    if (step == 'refresh') {
+                        retryTokenRefresh(status == 429 ? 'rateLimited' : 'cloudRejected', status, headers); return
                     }
                     throw validationError(authenticationError(tokens, step))
                 }
@@ -696,6 +776,29 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
                 atomicState.tokens = state.tokens
                 state.refreshing = false; state.authRequest = null
                 atomicState.refreshing = false
+                state.refreshFailures = 0; state.refreshRetryAt = null
+                boolean automatic = a.automatic == true
+                if (step == 'exchange') {
+                    if (settings.rememberPassword == true && a.credentials) {
+                        state.savedCredentials = [:] + a.credentials
+                        atomicState.savedCredentials = state.savedCredentials
+                    } else if (state.savedCredentials) {
+                        // Browser sign-in can select another account; it cannot
+                        // validate which saved password belongs to the new grant.
+                        forgetSavedPassword()
+                    }
+                    state.passwordLoginBlocked = false; state.passwordLoginFailures = 0; state.passwordLoginRetryAt = null
+                    if (automatic) {
+                        // If the new grant is rejected immediately, back off the
+                        // next full login instead of repeatedly submitting a password.
+                        int recoveries = now() - ((state.passwordRecoveredAt ?: 0L) as long) > 3600000L ? 1 : Math.min(5, ((state.passwordRecoveries ?: 0) as int) + 1)
+                        state.passwordRecoveries = recoveries; state.passwordRecoveredAt = now()
+                        state.passwordRecoveryRetryAt = now() + Math.min(900, 60 * (1 << (recoveries - 1))) * 1000L
+                    } else {
+                        state.passwordRecoveryRetryAt = null; state.passwordRecoveredAt = null; state.passwordRecoveries = 0
+                    }
+                    unschedule('automaticSignIn')
+                }
                 clearLogin(); state.lastError = null; state.authStatus = 'Connected'
                 if (step == 'refresh') diagnostic('tokenRefreshSucceeded', [request: req.trace, elapsedMs: now() - (req.sentAt as long)])
                 scheduleTokenRefresh()
@@ -703,17 +806,39 @@ void handleAuthResponse(int status, String text, Map headers, Map req) {
                     diagnostic('authConnected')
                     state.generation = generation() + 1L
                     state.inFlight = [:]; state.httpQueue = []; state.writeBusy = [:]
-                    state.discovered = [:]; state.cache = [:]; state.pending = [:]; state.uncertainWrites = [:]
-                    getChildDevices().each { it.updateDataValue('orphaned', 'true'); it.applyAttributes([dataStatus: 'unavailable']) }
+                    state.streams = [:]
+                    if (!automatic) {
+                        state.discovered = [:]; state.cache = [:]; state.pending = [:]; state.uncertainWrites = [:]
+                        getChildDevices().each { it.updateDataValue('orphaned', 'true'); it.applyAttributes([dataStatus: 'unavailable']) }
+                    }
                     getChildDevices().findAll { it.getDataValue('kind') == 'connection' }.each { it.stopConnection() }
                     enqueueRead('accounts', null, c.root + '/v1/accounts', [:])
                     runIn(60, 'maintenance')
+                    if (automatic && state.pending) runIn(10, 'reconcileCommands')
                 }
+                if (state.initializeAfterRefresh) { initialize(); return }
                 pump(); return
         }
     } catch (Exception e) {
+        if (state.authRequest?.id != req.id && state.tokens?.refresh_token) {
+            // The token pair is already durable. A child/queue failure during
+            // subsequent setup must not turn successful sign-in into an auth retry.
+            state.lastError = null; state.authStatus = 'Connected'
+            setCloudError('Signed in, but connection setup was interrupted. Retrying automatically.')
+            diagnostic('connectionSetupRetry')
+            runIn(60, 'resumeAfterAuthentication'); return
+        }
         diagnostic('authFailure', [step: step, exception: e instanceof MissingMethodException ? 'missingMethod' : e instanceof MissingPropertyException ? 'missingProperty' : e instanceof SecurityException ? 'security' : e instanceof java.net.URISyntaxException ? 'invalidUri' : 'other', operation: e instanceof MissingMethodException && e.method in ['resolve', 'getPath', 'getHost', 'getScheme', 'split'] ? e.method : 'other'])
         authFailure(validationMessage(e, 'Unexpected authentication response. Try browser sign-in.'), step == 'refresh')
+    }
+}
+void resumeAfterAuthentication() {
+    if (!enabled() || !state.tokens?.refresh_token) return
+    if (signInInProgress() || state.refreshing) { runIn(60, 'resumeAfterAuthentication'); return }
+    try { initialize() }
+    catch (Exception ignored) {
+        diagnostic('connectionSetupRetry')
+        runIn(60, 'resumeAfterAuthentication')
     }
 }
 String trustedAuthRedirect(String value) {
@@ -739,25 +864,61 @@ String authenticationError(Map error, String step = null) {
     if (code.toLowerCase().contains('captcha')) return 'Resideo requires a CAPTCHA. Use browser sign-in.'
     if (code.toLowerCase().contains('mfa')) return 'Resideo requires additional verification. Use browser sign-in.'
     if (code in ['too_many_attempts', 'blocked_user']) return 'Resideo blocked this sign-in attempt. Wait and use browser sign-in.'
+    if (code in ['invalid_client', 'unauthorized_client', 'unsupported_grant_type', 'invalid_request']) return 'Resideo rejected the integration sign-in configuration. Update the integration before trying again.'
     'Resideo rejected authentication. Try browser sign-in.'
 }
 
 void authFailure(String message, boolean refresh) {
     diagnostic('authFailure', [step: state.authRequest?.step, reason: authFailureReason(message)])
+    if (refresh) { retryTokenRefresh(authFailureReason(message)); return }
+    boolean automatic = state.loginAttempt?.automatic == true
+    if (automatic && authFailureReason(message) in ['timeout', 'transport']) { retryAutomaticSignIn(authFailureReason(message)); return }
     state.authRequest = null; state.refreshing = false
     clearLogin()
     state.lastError = message
-    if (refresh) requireReauth(message)
-    else state.authStatus = state.tokens ? 'Connected; sign-in attempt failed' : 'Sign-in failed'
+    state.authStatus = state.tokens ? 'Connected; sign-in attempt failed' : 'Sign-in failed'
+    if (automatic) {
+        state.passwordLoginBlocked = true; state.authStatus = 'Reauthentication required'
+        unschedule('automaticSignIn'); diagnostic('automaticSignInBlocked', [reason: authFailureReason(message)])
+    }
 }
-void requireReauth(String message) {
+void retryTokenRefresh(String reason, int status = 0, Map headers = [:]) {
+    state.refreshing = false; atomicState.refreshing = false
+    if (!state.tokens?.refresh_token) return
+    state.tokens = state.tokens + [expiresAt: 0L]; atomicState.tokens = state.tokens
+    int failures = Math.min(6, ((state.refreshFailures ?: 0) as int) + 1)
+    state.refreshFailures = failures
+    int delay = status == 429 ? retryDelay(headers) : Math.min(900, 30 * (1 << (failures - 1)))
+    state.refreshRetryAt = now() + delay * 1000L
+    if (status == 429) state.cooldownUntil = Math.max((state.cooldownUntil ?: 0L) as long, state.refreshRetryAt as long)
+    state.lastError = null; state.authStatus = 'Reconnecting automatically'
+    diagnostic(status == 429 ? 'tokenRefreshRateLimited' : 'tokenRefreshRetry', [reason: reason, http: status, retrySeconds: delay])
+    // Keep the request identity until retry so a late successful response can
+    // still save a rotated token. A replacement request makes older callbacks stale.
+    if (state.initializeAfterRefresh) { initialize(); return }
+    runIn(delay, 'refreshTokens')
+}
+void requireReauth(String message, boolean allowPassword = true) {
     diagnostic('reauthRequired', [reason: authFailureReason(message)])
+    boolean activeLogin = signInInProgress() && state.authRequest?.step != 'refresh'
+    Map activeRequest = activeLogin ? state.authRequest : null
     state.tokens = null; state.refreshing = false; state.authRequest = null
-    state.authStatus = 'Reauthentication required'; state.lastError = message
+    if (activeLogin) state.authRequest = activeRequest
+    atomicState.tokens = null; atomicState.refreshing = false
+    state.refreshRetryAt = null; state.refreshFailures = 0
+    if (state.initializeAfterRefresh) { state.initializeAfterRefresh = false; runIn(1, 'initialize') }
+    if (!allowPassword) { state.passwordLoginBlocked = true; diagnostic('automaticSignInBlocked', [reason: authFailureReason(message)]) }
+    if (!activeLogin) { state.authStatus = 'Reauthentication required'; state.lastError = message }
     state.httpQueue = []; state.inFlight = [:]; state.writeBusy = [:]
     unschedule('refreshTokens')
     getChildDevices().findAll { it.getDataValue('kind') == 'connection' }.each { it.stopConnection() }
     getChildDevices().each { it.applyAttributes([connectionStatus: 'authentication required', dataStatus: 'unavailable']) }
+    if (activeLogin) return
+    if (enabled() && savedPasswordAvailable() && !state.passwordLoginBlocked) {
+        state.lastError = null; state.authStatus = 'Reconnecting automatically'
+        runIn(1, 'automaticSignIn')
+        runIn(60, 'maintenance')
+    }
 }
 void scheduleTokenRefresh() {
     long delay = Math.max(1L, ((((state.tokens.expiresAt as long) - now()) / 1000L) as long) - 300L)
@@ -766,7 +927,10 @@ void scheduleTokenRefresh() {
 boolean freshToken() { state.tokens?.access_token && ((state.tokens.expiresAt ?: 0) as long) - now() > 300000L }
 void refreshTokens() {
     if (!enabled() || state.refreshing || !state.tokens?.refresh_token) return
-    if (state.loginAttempt || state.browserAttempt || state.authRequest) { runIn(60, 'refreshTokens'); return }
+    if (state.authUiAction || state.loginAttempt || state.browserAttempt || (state.authRequest && state.authRequest.step != 'refresh')) { runIn(60, 'refreshTokens'); return }
+    if (((state.refreshRetryAt ?: 0L) as long) > now()) {
+        runIn(Math.max(1, Math.ceil(((state.refreshRetryAt as long) - now()) / 1000.0d) as int), 'refreshTokens'); return
+    }
     if (((state.cooldownUntil ?: 0L) as long) > now()) { runIn(remainingCooldown(), 'refreshTokens'); return }
     state.refreshing = true
     // Record the refresh intent before transmitting a possibly single-use token.
@@ -1133,6 +1297,15 @@ void refreshDevice(String mac, boolean metadata, Map context = [:]) {
 }
 void maintenance() {
     if (!enabled()) return
+    // Check locally even when push is healthy and there are no REST requests.
+    if (state.refreshing && (!state.authRequest || now() - ((state.authRequest.sentAt ?: 0L) as long) >= 35000L))
+        retryTokenRefresh('timeout')
+    if (state.tokens?.refresh_token && !freshToken()) refreshTokens()
+    if (!state.tokens?.refresh_token && savedPasswordAvailable() && !state.passwordLoginBlocked) {
+        if (state.loginAttempt?.automatic && state.authRequest && now() - ((state.authRequest.sentAt ?: 0L) as long) >= 35000L)
+            retryAutomaticSignIn('timeout')
+        automaticSignIn()
+    }
     selectedMacs().each { mac ->
         Map d = (state.cache ?: [:])[mac] ?: [:]
         String loc = (state.discovered ?: [:])[mac]?.locationId
@@ -1730,7 +1903,9 @@ Map diagnosticSnapshot() {
 String operationSummary() { 'Selected thermostats: ' + selectedMacs().size() + '. ' + (state.streams ?: [:]).values().count { it.ready } + ' live location stream(s). Fallback polling: ' + pollingMinutes() + ' minutes.' }
 String safeServiceMessage(Map body, List extraSecrets = []) {
     String value = (body.message ?: body.Message ?: body.error_description ?: 'Request rejected by cloud service.').toString()
-    List secrets = [settings.loginEmail, settings.loginPassword, state.tokens?.access_token, state.tokens?.refresh_token] + extraSecrets
+    List secrets = [settings.loginEmail, settings.loginPassword, state.savedCredentials?.email, state.savedCredentials?.password,
+        state.loginAttempt?.credentials?.email, state.loginAttempt?.credentials?.password,
+        state.tokens?.access_token, state.tokens?.refresh_token] + extraSecrets
     secrets += (state.discovered ?: [:]).keySet()
     secrets.findAll { it }.each { value = value.replace(it.toString(), '[redacted]') }
     value.replaceAll(/(?i)bearer\s+\S+/, 'Bearer [redacted]').replaceAll(/[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/, '[redacted]').replaceAll(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/, '[redacted]').take(200)

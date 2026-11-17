@@ -39,11 +39,13 @@ Do not create virtual thermostat or sensor devices manually. The app provisions 
 ## Sign in with email/password
 
 1. Enter the email and password you use in First Alert.
-2. Select **Sign in with email and password**.
+2. Optionally enable **Save password on this hub for automatic sign-in**, then select **Sign in with email and password**.
 3. Allow several seconds while the highlighted status shows the current sign-in step. The page refreshes automatically, including while it finds your thermostats. Wait for a final green status or red error before trying again. Green indicates success; red explains the next action. The same status appears at the top and beside the connection check.
 4. If CAPTCHA, MFA, or another automated-login restriction is reported, use browser sign-in below.
 
-The password is used only by Resideo's sign-in flow and is cleared after completion or cancellation. The hub retains the resulting access and refresh tokens. Hub administrators and backups can access app state; use the sanitized Hubitat logs when requesting help; do not share raw app state or login redirects.
+The password entry field is cleared after completion or cancellation. By default, only the resulting access and refresh tokens are retained. If you enable **Save password on this hub for automatic sign-in**, a successful password sign-in also saves the email and password in the hub's app storage. The saved password is in readable form and is accessible to hub administrators and through backups: keep your hub, local network, and backups secure. Passwords are excluded from the setup page, logs, and diagnostics. Turning the option off deletes the saved credentials from the app; existing backups may still contain them. To replace a saved password, enter the new password and sign in successfully.
+
+The saved refresh token lets the app reconnect automatically after the hub has been off, even if the access token expired. Temporary network or service failures retain the token and retry automatically. If Resideo expires or revokes the refresh token, the app uses your saved password, when enabled, to sign in again and obtain new tokens. Password sign-in retries temporary failures with backoff and follows the service's rate-limit cooldowns. Rejected passwords, CAPTCHA, MFA, blocked accounts, and unsupported sign-in responses pause automatic attempts and show the required action. Correct the password and sign in again, or use browser sign-in when verification is required. Successful browser sign-in clears any previously saved password to prevent subsequent recovery from switching back to a different account; use password sign-in once to save credentials again. If an older version already discarded your token and no password was saved, sign in once after installing the updated app.
 
 ## Browser-assisted sign-in
 

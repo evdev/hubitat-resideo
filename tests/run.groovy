@@ -22,6 +22,22 @@ def ready = { ->
     s.synchronizeSensors(mac)
     s
 }
+def savedPasswordApp = { ->
+    def s = ready()
+    s.settings.rememberPassword = true; s.settings.loginEmail = 'saved@example.invalid'
+    s.state.savedCredentials = [email: 'saved@example.invalid', password: 'saved-password-secret']
+    s.atomicState.savedCredentials = s.state.savedCredentials
+    s
+}
+def finishPasswordLogin = { s ->
+    String nonce = s.state.loginAttempt.nonce
+    s.respond(s.requests[-1], 302, '', [Location: '/login?state=saved-state', 'Set-Cookie': 'auth0=private-session; Path=/'])
+    s.respond(s.requests[-1], 200, '', ['Set-Cookie': '_csrf=private-csrf; Path=/'])
+    s.respond(s.requests[-1], 200, '<input name="wresult" value="result"><input name="wctx" value="context">')
+    s.respond(s.requests[-1], 302, '', [Location: '/authorize/resume'])
+    s.respond(s.requests[-1], 302, '', [Location: s.constants().redirect + '?code=code&state=' + nonce])
+    s.respond(s.requests[-1], 200, [access_token: 'saved-access', refresh_token: 'saved-refresh', expires_in: 3600])
+}
 def messages = { drv -> drv.state.bridgeOutbox ?: [] }
 int passed = 0
 def test = { String name, Closure body ->
@@ -75,6 +91,221 @@ test('Password login performs all six steps with cookies, form decoding, and exp
     assert s.state.tokens.refresh_token == 'new-refresh'
     assert !s.settings.loginPassword && !s.state.loginAttempt
     assert s.requests.take(6).every { it.params.followRedirects == false }
+    assert !s.state.savedCredentials && !s.durable.savedCredentials
+}
+test('Saved-password option is off by default and explains local readable storage') {
+    def s = app(); s.mainPage()
+    Map option = s.metadataCalls.find { it[0] == 'input' && it[1].contains('rememberPassword') }[1].find { it instanceof Map }
+    assert option.defaultValue == false && option.submitOnChange
+    assert s.metadataCalls.any { it[0] == 'paragraph' && it[1].join().contains('stored on this hub in readable form') }
+    assert s.metadataCalls.any { it[0] == 'paragraph' && it[1].join().contains('Keep your hub, local network, and backups secure') }
+}
+test('Opt-in saves the successful credential snapshot durably and removes the entry field') {
+    def s = app(); s.settings.rememberPassword = true; s.settings.loginEmail = 'saved@example.invalid'
+    s.settings.loginPassword = 'original-password-secret'; s.startPasswordLogin()
+    assert !s.state.savedCredentials
+    s.settings.loginPassword = 'edited-password-secret'
+    finishPasswordLogin(s)
+    assert s.state.savedCredentials == [email: 'saved@example.invalid', password: 'original-password-secret']
+    assert s.durable.savedCredentials == s.state.savedCredentials
+    Map submitted = new JsonSlurper().parseText(s.requests.find { it.data?.step == 'credentials' }.params.body)
+    assert submitted.password == 'original-password-secret'
+    assert !s.settings.loginPassword && !s.state.loginAttempt
+    s.mainPage()
+    assert !s.metadataCalls.toString().contains('original-password-secret')
+    assert !s.logs.join().contains('original-password-secret')
+    assert !JsonOutput.toJson(s.diagnosticSnapshot()).contains('original-password-secret')
+    assert !s.safeServiceMessage([message: 'Rejected original-password-secret for saved@example.invalid']).contains('original-password-secret')
+}
+test('A revoked token falls back to saved-password sign-in and keeps existing device state') {
+    def s = savedPasswordApp(); Set children = s.children.keySet() as Set
+    Map cache = s.deepCopy(s.state.cache); s.state.pending = [kept: [mac: mac]]
+    s.refreshTokens(); s.respond(s.requests[-1], 400, [error: 'invalid_grant'])
+    assert s.state.authStatus == 'Reconnecting automatically' && !s.state.lastError
+    s.advance(1000L)
+    assert s.state.loginAttempt.automatic && !s.settings.loginPassword
+    finishPasswordLogin(s)
+    assert s.state.tokens.refresh_token == 'saved-refresh' && s.state.authStatus == 'Connected'
+    assert s.children.keySet() as Set == children
+    assert s.state.cache == cache && s.state.pending.kept && !s.state.passwordLoginBlocked
+    assert s.requests.find { it.params.uri.endsWith('/accounts') }
+    assert !s.logs.join().contains('saved-password-secret') && !s.logs.join().contains('saved@example.invalid')
+}
+test('A new app execution after days offline can sign in using only persisted credentials') {
+    def original = savedPasswordApp(); original.state.tokens = null
+    Map saved = new JsonSlurper().parseText(JsonOutput.toJson(original.state))
+    def s = app(); s.state.putAll(saved); s.settings.putAll(original.settings)
+    s.advance(4L * 86400000L); s.systemStart(null); s.advance(1000L)
+    assert s.state.loginAttempt.automatic && s.state.loginAttempt.credentials.password == 'saved-password-secret'
+    finishPasswordLogin(s)
+    assert s.state.authStatus == 'Connected' && s.durable.tokens.refresh_token == 'saved-refresh'
+}
+test('Startup first tries an expired saved token and falls back to the password if rejected') {
+    def s = savedPasswordApp(); s.advance(4L * 86400000L); s.systemStart(null)
+    assert s.requests[-1].params.uri.endsWith('/oauth/token')
+    s.respond(s.requests[-1], 401, [error: 'invalid_grant']); s.advance(1000L)
+    assert s.state.loginAttempt.automatic
+    finishPasswordLogin(s)
+    assert s.state.authStatus == 'Connected'
+}
+test('Automatic password login backs off on service errors and respects Retry-After') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+    s.respond(s.requests[-1], 503, [error: 'temporarily_unavailable'])
+    assert s.state.passwordLoginRetryAt == s.now() + 60000L && !s.state.passwordLoginBlocked
+    s.advance(60000L)
+    s.respond(s.requests[-1], 429, [error: 'too_many_requests'], ['Retry-After': '180'])
+    int count = s.requests.size()
+    s.maintenance(); s.advance(179000L)
+    assert s.requests.size() == count && s.state.savedCredentials
+    s.advance(1000L)
+    assert s.requests.size() == count + 1 && s.state.loginAttempt.automatic
+    finishPasswordLogin(s)
+    assert s.state.authStatus == 'Connected' && !s.state.passwordLoginFailures && !s.state.passwordLoginRetryAt
+}
+test('Automatic password login recovers lost timeouts and interrupted attempts') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+    s.unschedule('authTimeout'); s.advance(60000L)
+    assert !s.state.loginAttempt && s.state.passwordLoginRetryAt
+    s.advance(60000L)
+    assert s.state.loginAttempt.automatic
+    Map stale = s.requests[-1]
+    s.systemStart(null); s.advance(1000L)
+    s.respond(stale, 302, '', [Location: '/login?state=old'])
+    assert s.state.authRequest.id != stale.data.id && s.state.loginAttempt.automatic
+    finishPasswordLogin(s)
+    assert s.state.authStatus == 'Connected'
+}
+test('Bad saved passwords, CAPTCHA, MFA and blocking pause automatic attempts across restart') {
+    ['invalid_user_password', 'invalid_captcha', 'mfa_required', 'blocked_user'].each { error ->
+        def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+        s.respond(s.requests[-1], 302, '', [Location: '/login?state=state'])
+        s.respond(s.requests[-1], 200, '', ['Set-Cookie': '_csrf=csrf; Path=/'])
+        s.respond(s.requests[-1], 400, [code: error])
+        assert s.state.passwordLoginBlocked && s.state.authStatus == 'Reauthentication required'
+        assert s.state.savedCredentials && !s.state.loginAttempt
+        int count = s.requests.size()
+        s.systemStart(null); s.advance(3600000L); s.automaticSignIn()
+        assert s.requests.size() == count
+        s.settings.loginPassword = 'replacement-password'; s.startPasswordLogin(); finishPasswordLogin(s)
+        assert !s.state.passwordLoginBlocked && s.state.savedCredentials.password == 'replacement-password'
+    }
+}
+test('Turning off password storage deletes persisted credentials and cancels automatic login') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+    Map old = s.requests[-1]
+    s.settings.rememberPassword = false; s.mainPage()
+    assert !s.state.savedCredentials && !s.durable.savedCredentials && !s.state.loginAttempt && !s.state.authRequest
+    s.respond(old, 302, '', [Location: '/login?state=old']); s.advance(3600000L)
+    assert s.requests.size() == 1 && !s.state.tokens
+}
+test('Disabled integration keeps the saved password and does not automatically sign in') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.settings.integrationEnabled = false
+    s.updated(); s.advance(3600000L); s.automaticSignIn()
+    assert !s.requests && s.state.savedCredentials && !s.jobs
+    s.settings.integrationEnabled = true; s.updated(); s.advance(1000L)
+    assert s.state.loginAttempt.automatic
+}
+test('Saved passwords are bound to their email and browser sign-in clears the old credential') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.settings.loginEmail = 'other@example.invalid'
+    s.initialize(); s.automaticSignIn(); assert !s.requests && !s.savedPasswordAvailable()
+    s.startBrowserLogin()
+    s.settings.browserRedirect = s.constants().browserRedirect + '?code=code&state=' + s.state.browserAttempt.nonce
+    s.finishBrowserLogin()
+    s.respond(s.requests[-1], 200, [access_token: 'browser-access', refresh_token: 'browser-refresh', expires_in: 3600])
+    assert !s.state.savedCredentials && !s.durable.savedCredentials && s.state.authStatus == 'Connected'
+}
+test('Cancelling automatic sign-in pauses retries and uninstall removes stored credentials') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+    s.appButtonHandler('cancelLogin'); s.advance(3600000L)
+    assert s.state.passwordLoginBlocked && s.requests.size() == 1 && !s.state.loginAttempt
+    s.uninstalled()
+    assert !s.state.savedCredentials && !s.durable.savedCredentials && !s.jobs
+}
+test('Authentication review: cancelling a manual sign-in keeps previously enabled recovery available') {
+    def s = savedPasswordApp(); s.startPasswordLogin(); s.appButtonHandler('cancelLogin')
+    assert !s.state.passwordLoginBlocked
+    s.state.tokens = null; s.initialize(); s.advance(1000L)
+    assert s.state.loginAttempt.automatic
+}
+test('Authentication review: restart during manual sign-in can still recover with a saved password') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.startPasswordLogin()
+    s.systemStart(null); s.advance(1000L)
+    assert s.state.loginAttempt.automatic && !s.state.passwordLoginBlocked
+}
+test('Authentication review: rejected new tokens do not start a rapid password-login loop') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+    finishPasswordLogin(s)
+    s.requireReauth('Resideo rejected this account. Sign in again.')
+    int count = s.requests.size()
+    s.advance(1000L); s.systemStart(null); s.advance(1000L)
+    assert s.requests.size() == count && !s.state.loginAttempt
+    s.advance(58000L)
+    assert s.state.loginAttempt.automatic
+    finishPasswordLogin(s)
+    s.requireReauth('Resideo rejected this account. Sign in again.')
+    count = s.requests.size(); s.advance(119000L)
+    assert s.requests.size() == count
+    s.advance(1000L); assert s.state.loginAttempt.automatic
+}
+test('Authentication review: older API rejection cannot cancel a password or browser exchange') {
+    ['password', 'browser'].each { flow ->
+        def s = savedPasswordApp()
+        s.enqueueRead('accounts', null, '/ris-public-api/api/v1/accounts', [:])
+        s.respond(s.requests[-1], 401, [:])
+        s.respond(s.requests[-1], 200, [access_token: 'renewed', refresh_token: 'renewed-refresh', expires_in: 3600])
+        Map old = s.requests[-1]
+        if (flow == 'password') s.startPasswordLogin()
+        else {
+            s.startBrowserLogin()
+            s.settings.browserRedirect = s.constants().browserRedirect + '?code=code&state=' + s.state.browserAttempt.nonce
+            s.finishBrowserLogin()
+        }
+        Map active = s.requests[-1]
+        s.respond(old, 401, [:])
+        assert s.state.authRequest?.id == active.data.id
+        if (flow == 'password') finishPasswordLogin(s)
+        else s.respond(active, 200, [access_token: 'browser-access', refresh_token: 'browser-refresh', expires_in: 3600])
+        assert s.state.authStatus == 'Connected' && s.state.tokens && !s.state.lastError
+    }
+}
+test('Authentication review: refresh rejection recognizes name errors and pauses for verification') {
+    def s = savedPasswordApp(); s.refreshTokens()
+    s.respond(s.requests[-1], 400, [name: 'invalid_grant'])
+    s.advance(1000L); assert s.state.loginAttempt.automatic
+    ['mfa_required', 'invalid_captcha', 'blocked_user', 'invalid_client'].each { code ->
+        s = savedPasswordApp(); s.refreshTokens()
+        s.respond(s.requests[-1], 403, [error: code])
+        int count = s.requests.size(); s.advance(120000L)
+        assert s.state.passwordLoginBlocked && !s.state.loginAttempt && !s.state.tokens
+        assert s.requests.size() == count && s.state.lastError
+    }
+}
+test('Authentication review: setup failure after token persistence keeps successful authentication') {
+    def s = savedPasswordApp(); s.state.tokens = null; s.initialize(); s.advance(1000L)
+    def original = s.metaClass.getMetaMethod('enqueueRead', [String, String, String, Map] as Class[])
+    int failures = 0
+    s.metaClass.enqueueRead = { String kind, String identity, String path, Map context ->
+        if (failures++ < 2) throw new IllegalStateException('simulated connection setup failure')
+        original.invoke(s, [kind, identity, path, context] as Object[])
+    }
+    finishPasswordLogin(s)
+    assert s.state.authStatus == 'Connected' && !s.state.lastError && !s.state.passwordLoginBlocked
+    assert s.durable.tokens.refresh_token == 'saved-refresh'
+    assert s.state.cloudError && s.jobs.any { it.handler == 'resumeAfterAuthentication' }
+    assert !s.jobs.any { it.handler == 'automaticSignIn' }
+    s.unschedule('maintenance'); s.advance(60000L)
+    assert s.jobs.any { it.handler == 'resumeAfterAuthentication' } && s.state.tokens
+    s.advance(60000L)
+    assert s.requests.any { it.params.uri.endsWith('/accounts') }
+    assert s.state.diagnosticCounters.automaticSignInStarted == 1 && s.state.authStatus == 'Connected'
+}
+test('Authentication review: opting out during a password exchange cannot save the password again') {
+    def s = savedPasswordApp(); s.settings.loginPassword = 'replacement-password'; s.startPasswordLogin()
+    s.settings.rememberPassword = false; s.mainPage()
+    assert !s.state.savedCredentials && !s.durable.savedCredentials
+    finishPasswordLogin(s)
+    assert !s.state.savedCredentials && !s.durable.savedCredentials && !s.settings.loginPassword
+    assert s.state.tokens && s.state.authStatus == 'Connected'
 }
 test('CAPTCHA and MFA errors offer browser sign-in and clear passwords') {
     ['invalid_captcha', 'mfa_required'].each { code ->
@@ -91,12 +322,137 @@ test('Token refresh is single flight and persists rotation before releasing wait
     assert s.state.tokens.refresh_token == 'rotated-refresh'
     assert s.requests[1].params.headers.Authorization == 'Bearer rotated-access'
 }
-test('Ambiguous refresh timeout requires reauthentication without replay') {
+test('Refresh timeout retains credentials, accepts a late rotation, and cancels its retry') {
     def s = ready(); s.state.tokens.expiresAt = 0L; s.refreshTokens(); s.advance(35000L)
-    assert !s.state.tokens && s.state.authStatus == 'Reauthentication required'
+    assert s.state.tokens.refresh_token == 'refresh-secret' && s.durable.tokens.refresh_token == 'refresh-secret'
+    assert s.state.authStatus == 'Reconnecting automatically' && !s.state.lastError
     assert s.requests.size() == 1
-    s.respond(s.requests[0], 200, [access_token: 'late', refresh_token: 'late'])
-    assert !s.state.tokens
+    s.respond(s.requests[0], 200, [access_token: 'late-access', refresh_token: 'late-refresh', expires_in: 3600])
+    s.advance(30000L)
+    assert s.state.tokens.refresh_token == 'late-refresh' && s.durable.tokens.refresh_token == 'late-refresh'
+    assert s.requests.size() == 1 && s.state.authStatus == 'Connected'
+}
+test('Startup after several days offline renews expired saved tokens before account requests') {
+    def original = ready()
+    Map saved = new JsonSlurper().parseText(JsonOutput.toJson(original.state))
+    def s = app(); s.state.putAll(saved); s.settings.selectedThermostats = [mac]
+    s.advance(3L * 86400000L)
+    s.systemStart(null)
+    Map renewal = s.requests[-1]
+    assert renewal.params.uri.endsWith('/oauth/token')
+    assert new JsonSlurper().parseText(renewal.params.body).refresh_token == 'refresh-secret'
+    assert !s.state.lastError && s.state.authStatus == 'Reconnecting automatically'
+    s.respond(renewal, 200, [access_token: 'recovered-access', refresh_token: 'recovered-refresh', expires_in: 3600])
+    assert s.state.authStatus == 'Connected' && s.durable.tokens.refresh_token == 'recovered-refresh'
+    assert s.requests.find { it.params.uri.endsWith('/accounts') }.params.headers.Authorization == 'Bearer recovered-access'
+}
+test('Restart during renewal recovers the saved token and ignores the old callback') {
+    def s = ready(); s.refreshTokens(); Map interrupted = s.requests[-1]
+    s.systemStart(null)
+    Map recovered = s.requests[-1]
+    assert recovered != interrupted && recovered.params.uri.endsWith('/oauth/token')
+    assert s.state.tokens.refresh_token == 'refresh-secret' && !s.state.lastError
+    s.respond(interrupted, 200, [access_token: 'old-access', refresh_token: 'old-refresh'])
+    assert s.state.tokens.refresh_token == 'refresh-secret'
+    s.respond(recovered, 200, [access_token: 'recovered-access', refresh_token: 'recovered-refresh', expires_in: 3600])
+    assert s.state.tokens.refresh_token == 'recovered-refresh' && !s.state.refreshing
+}
+test('Restart after token persistence but before clearing renewal intent uses the latest pair') {
+    def s = ready()
+    s.state.tokens = [access_token: 'newest-access', refresh_token: 'newest-refresh', expiresAt: s.now() + 3600000L]
+    s.atomicState.tokens = s.state.tokens; s.state.refreshing = true
+    s.systemStart(null)
+    assert new JsonSlurper().parseText(s.requests[-1].params.body).refresh_token == 'newest-refresh'
+    assert s.state.tokens && !s.state.lastError
+}
+test('Saving preferences during renewal preserves the callback and applies changes afterward') {
+    def s = ready(); s.refreshTokens(); Map renewal = s.requests[-1]; long gen = s.generation()
+    s.updated()
+    assert s.generation() == gen && s.state.authRequest.id == renewal.data.id
+    assert s.state.initializeAfterRefresh && s.requests.size() == 1
+    s.respond(renewal, 200, [access_token: 'saved-access', refresh_token: 'saved-refresh', expires_in: 3600])
+    assert s.generation() > gen && !s.state.initializeAfterRefresh
+    assert s.state.tokens.refresh_token == 'saved-refresh' && !s.state.lastError
+    assert s.requests.find { it.params.uri.endsWith('/accounts') }
+}
+test('Renewal retries temporary failures with backoff across restart, then recovers') {
+    def s = ready(); s.state.tokens.expiresAt = 0L; s.refreshTokens()
+    s.respond(s.requests[-1], 503, [error: 'temporarily_unavailable'])
+    assert s.state.tokens.refresh_token == 'refresh-secret' && !s.state.lastError
+    long deadline = s.state.refreshRetryAt
+    s.systemStart(null); s.advance(1000L)
+    assert s.requests.count { it.params.uri.endsWith('/oauth/token') } == 1
+    s.advance(deadline - s.now())
+    Map retry = s.requests[-1]
+    assert s.requests.count { it.params.uri.endsWith('/oauth/token') } == 2
+    s.respond(retry, 0, '')
+    assert s.state.refreshRetryAt == s.now() + 60000L
+    s.advance(60000L)
+    s.respond(s.requests[-1], 200, [access_token: 'online-access', refresh_token: 'online-refresh', expires_in: 3600])
+    assert s.state.authStatus == 'Connected' && !s.state.refreshFailures && !s.state.refreshRetryAt
+}
+test('Renewal respects Retry-After and a watchdog cannot bypass it') {
+    def s = ready(); s.state.tokens.expiresAt = 0L; s.refreshTokens()
+    s.respond(s.requests[-1], 429, [error: 'too_many_requests'], ['Retry-After': '120'])
+    s.maintenance(); s.advance(119000L)
+    assert s.requests.size() == 1 && s.state.tokens.refresh_token == 'refresh-secret'
+    s.advance(1000L)
+    assert s.requests.size() == 2
+}
+test('Minute watchdog renews a stale token even when push is healthy and refresh job is lost') {
+    def s = ready(); s.state.streams = [loc: [ready: true]]
+    s.state.tokens.expiresAt = s.now() + 240000L
+    s.unschedule('refreshTokens'); s.maintenance(); s.maintenance()
+    assert s.requests.size() == 1 && s.requests[0].params.uri.endsWith('/oauth/token')
+    assert s.state.refreshing && s.jobs.count { it.handler == 'maintenance' } == 1
+}
+test('Minute watchdog recovers a stuck renewal after its timeout job is lost') {
+    def s = ready(); s.state.streams = [loc: [ready: true]]
+    s.state.tokens.expiresAt = 0L; s.refreshTokens()
+    s.unschedule('authTimeout'); s.advance(60000L); s.maintenance()
+    assert !s.state.refreshing && s.state.tokens.refresh_token == 'refresh-secret'
+    assert s.requests.size() == 1 && s.state.refreshRetryAt == s.now() + 30000L
+    s.advance(30000L)
+    assert s.requests.size() == 2 && s.state.refreshing
+}
+test('Preference save followed by a failed renewal still applies settings and retries') {
+    def s = ready(); s.refreshTokens(); s.updated()
+    s.respond(s.requests[-1], 503, [error: 'temporarily_unavailable'])
+    assert !s.state.initializeAfterRefresh && !s.state.refreshing && s.state.tokens
+    assert s.state.authStatus == 'Reconnecting automatically'
+    s.advance(30000L)
+    s.respond(s.requests[-1], 200, [access_token: 'recovered-access', refresh_token: 'recovered-refresh', expires_in: 3600])
+    assert s.state.authStatus == 'Connected' && !s.state.lastError
+}
+test('Manual sign-in can supersede a renewal waiting to retry without a late callback erasing it') {
+    ['browser', 'password'].each { flow ->
+        def s = ready(); s.refreshTokens(); Map old = s.requests[-1]
+        s.respond(old, 503, [error: 'temporarily_unavailable'])
+        if (flow == 'browser') s.startBrowserLogin()
+        else s.scheduleAuthUiAction('password')
+        assert !s.state.authRequest
+        s.respond(old, 200, [access_token: 'late', refresh_token: 'late'])
+        assert s.state.tokens.refresh_token == 'refresh-secret'
+        assert flow == 'browser' ? s.state.browserAttempt : s.state.authUiAction
+    }
+}
+test('Explicit expired or revoked refresh grants require sign-in and clear durable credentials') {
+    [400, 401, 403].each { status ->
+        def s = ready(); s.refreshTokens()
+        s.respond(s.requests[-1], status, [error: 'invalid_grant'])
+        s.advance(120000L)
+        assert !s.state.tokens && !s.durable.tokens && !s.durable.refreshing
+        assert s.state.authStatus == 'Reauthentication required' && s.requests.size() == 1
+    }
+}
+test('Disabling during renewal stops retries while keeping the saved token for reenable') {
+    def s = ready(); s.state.tokens.expiresAt = 0L; s.refreshTokens(); Map old = s.requests[-1]
+    s.settings.integrationEnabled = false; s.updated(); s.advance(120000L)
+    s.respond(old, 200, [access_token: 'stale', refresh_token: 'stale'])
+    assert s.state.tokens.refresh_token == 'refresh-secret' && !s.state.refreshing
+    assert !s.jobs && s.requests.size() == 1
+    s.settings.integrationEnabled = true; s.updated()
+    assert s.requests[-1].params.uri.endsWith('/oauth/token')
 }
 test('Discovery excludes smoke detectors and preserves renamed devices and sensor identity') {
     def s = app(); s.settings.selectedThermostats = [mac]; s.state.generation = 1L
@@ -158,6 +514,77 @@ test('All writable advanced settings use exact endpoints and complete bodies') {
     assert s.buildCommand(command('setAdaptiveRecoveryEnabled', ['on'])).body.Mode == 'AdaptiveIntelligentRecovery'
     s.state.cache[mac].configuration.Reported.FreezeProtection.Configured = true
     assert s.buildCommand(command('setFreezeProtectionLowLimit', [40.6])).body.LowLimitDegrees == 41
+}
+test('Every exposed write matches offline requests recorded from the current upstream client') {
+    Map contract = fixture('command-contracts')
+    assert contract.revision == '0e2947b8ad83608ccf212dd2638f2aa3eda06eaa'
+    assert contract.cases.size() == 56
+    Closure sameJsonTypes
+    sameJsonTypes = { Object actual, Object expected ->
+        if (expected instanceof Map) {
+            assert actual instanceof Map && actual.keySet() == expected.keySet()
+            expected.each { k, v -> sameJsonTypes(actual[k], v) }
+        } else if (expected instanceof Boolean) assert actual instanceof Boolean
+        else if (expected instanceof Integer) assert actual instanceof Integer
+        else if (expected instanceof Number) assert actual instanceof Number
+        else assert actual?.getClass() == expected?.getClass()
+    }
+    Set commandsCovered = [] as Set
+    Set upstreamMethods = [] as Set
+    contract.cases.each { spec ->
+        def s = ready()
+        Map setup = spec.setup
+        s.location.temperatureScale = setup.scale ?: 'F'
+        s.state.cache[mac].shadow.Reported.ScheduleEnabled = setup.schedule ?: false
+        if (setup.hold) s.state.cache[mac].shadow.Reported.Setpoint.SetpointStatus = setup.hold
+        s.state.cache[mac].configuration.Reported.FreezeProtection.Configured = true
+        if (spec.sensor) {
+            Map sensor = s.findAccessory(s.state.cache[mac].rooms, 1).AccessoryValue
+            sensor.ExcludeMotion = setup.excludeMotion
+            sensor.ExcludeTemp = setup.excludeTemp
+            sensor.OccupancySensitivity = setup.sensitivity
+        }
+        def driver = load(spec.sensor ? 'drivers/resideo-room-sensor.groovy' : 'drivers/resideo-thermostat.groovy')
+        driver.device.data.mac = mac
+        if (spec.sensor) driver.device.data.accessoryId = '1'
+        driver.invokeMethod(spec.command, spec.args as Object[])
+        assert messages(driver).size() == 1 && messages(driver)[0].kind == 'command' : spec
+        s.acceptCommand(messages(driver)[0])
+        assert s.requests.size() == 1 : spec
+        Map request = s.requests[0]
+        Map body = new JsonSlurper().parseText(request.params.body)
+        assert request.verb == spec.request.method : spec
+        assert request.params.uri == spec.request.url : spec
+        assert body == spec.request.body : spec
+        sameJsonTypes(body, spec.request.body)
+        assert request.params.requestContentType == 'application/json'
+        assert request.params.headers.Authorization == 'Bearer access-secret'
+        contract.headers.each { key, value -> assert request.params.headers[key] == value }
+        commandsCovered << spec.command
+        upstreamMethods << spec.upstream_method
+    }
+    assert upstreamMethods.size() == 11
+    ['drivers/resideo-thermostat.groovy', 'drivers/resideo-room-sensor.groovy'].each { path ->
+        Set custom = load(path).metadataCalls.findAll { it[0] == 'command' }.collect { it[1][0] } as Set
+        assert commandsCovered.containsAll(custom)
+    }
+}
+test('Refresh uses the upstream read versions and unsupported schedule programming sends no write') {
+    def s = ready()
+    def driver = load('drivers/resideo-thermostat.groovy'); driver.device.data.mac = mac
+    driver.refresh()
+    assert messages(driver)[0] == [accountGeneration: 0L, kind: 'refresh', mac: mac]
+    s.refreshDevice(mac, true)
+    List reads = s.requests.collect { it.params.uri } + s.state.httpQueue.collect { s.constants().base + it.path }
+    String base = 'https://api.ha.resideo.com/ris-public-api/api/'
+    assert reads as Set == [base + 'v2/devices/thermostats/' + mac,
+        base + 'v2/devices/thermostats/' + mac + '/configuration',
+        base + 'v1/devices/thermostats/' + mac + '/priority',
+        base + 'v1/devices/thermostats/' + mac + '/group/0/rooms'] as Set
+    assert s.requests.every { it.verb == 'GET' } && s.state.httpQueue.every { it.method == 'GET' }
+    driver.setSchedule([:]); driver.advance(100L)
+    assert driver.device.attributes.commandStatus == 'rejected'
+    assert !messages(driver).any { it.kind == 'command' }
 }
 test('Reads coalesce and never exceed two active network requests') {
     def s = ready(); s.refreshDevice(mac, true); s.refreshDevice(mac, true)

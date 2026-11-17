@@ -78,3 +78,17 @@ Physical-hub logs confirmed direct password sign-in and authenticated thermostat
 ## Integration placement and simpler setup — v0.1.10
 
 The app definition uses Hubitat’s documented Integrations menu field. The app, setup title and HPM listing are named Resideo Thermostats Integration, with stable package/component IDs. Existing default labels migrate without changing account state, selected devices or child identities; custom app labels remain intact. Diagnostic prepare/clear actions and report rendering are removed. Optional logging, its limits and internal sanitized history remain available for troubleshooting.
+
+## Authentication recovery review — 2026-11-16
+
+Follow-up review reproduced five issues in the local authentication changes:
+
+| Finding | Correction |
+| --- | --- |
+| Starting a manual sign-in set a persistent automatic-login pause, even when cancelled or interrupted | Preserve the existing pause state while a manual attempt is in progress; explicit cancellation of automatic recovery and actual automatic-login failures still pause it |
+| Rejection of newly issued tokens could immediately repeat the entire password flow | Persist a separate recovery cooldown: one minute after the first successful automatic login, doubling to a 15-minute maximum for repeated recovery within an hour |
+| An older API request's second 401 could erase an active password or browser exchange | Clear rejected API tokens and requests while preserving the current interactive authentication request and progress |
+| Refresh errors using `name` were not recognized, and verification/configuration errors could trigger unnecessary password submissions | Normalize `error`, `code`, and `name`; pause saved-password fallback for verification, blocking, and integration configuration errors |
+| A child or queue exception after token persistence could be reported as authentication failure | Keep the successful token pair and retry connection setup through a bounded scheduled recovery method, including retrying setup failures without another password submission |
+
+Seven regression groups cover these failures, both password/browser races, repeated setup failure followed by recovery, and opting out while a password exchange is still in flight. The full Groovy 2.4.21 suite passes **137 groups**. These changes require physical-hub validation before any live acceptance claim.

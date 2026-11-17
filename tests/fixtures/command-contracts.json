@@ -1,0 +1,1095 @@
+{
+  "repository": "https://github.com/sfcodes/ha-resideo",
+  "revision": "0e2947b8ad83608ccf212dd2638f2aa3eda06eaa",
+  "headers": {
+    "Accept": "application/json",
+    "User-Agent": "First Alert/2440 CFNetwork/3860.600.12 Darwin/25.5.0",
+    "Ocp-Apim-Subscription-Key": "b60885e8a9b44680a29ea1f03452878a"
+  },
+  "source_hashes_without_trailing_whitespace": {
+    "aioresideo/client.py": "1f329f47d90c11b3f0ff48fd4ad916a588736f19692288dcdda8f22655b5e4b5",
+    "aioresideo/const.py": "7d40f9a4ac3aef337a7bbc256c1adcd062cd5b616b6270df63bd9de04bbc2d85",
+    "climate.py": "1ae378b4523ddf49580eee928dc829d072ccbf17211898a9ca7b4b5a9f5c9f82"
+  },
+  "integer_half_ties": "Not compared: Hubitat uses half-up; upstream Python uses ties-to-even. Both emit valid integer Fahrenheit values.",
+  "cases": [
+    {
+      "command": "setThermostatMode",
+      "args": [
+        "heat"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Heat",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "heat",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Heat",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatMode",
+      "args": [
+        "cool"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Cool",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "cool",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Cool",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatMode",
+      "args": [
+        "off"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Off",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "off",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Off",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatMode",
+      "args": [
+        "auto"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Auto",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "auto",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Auto",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatMode",
+      "args": [
+        "emergency heat"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "EmergencyHeat",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "emergencyHeat",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "EmergencyHeat",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatFanMode",
+      "args": [
+        "auto"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_fan",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/fanSwitch",
+        "body": {
+          "FanSwitch": {
+            "Position": "Auto",
+            "Speed": 1
+          },
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "fanAuto",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_fan",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/fanSwitch",
+        "body": {
+          "FanSwitch": {
+            "Position": "Auto",
+            "Speed": 1
+          },
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatFanMode",
+      "args": [
+        "circulate"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_fan",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/fanSwitch",
+        "body": {
+          "FanSwitch": {
+            "Position": "Circulate",
+            "Speed": 1
+          },
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "fanCirculate",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_fan",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/fanSwitch",
+        "body": {
+          "FanSwitch": {
+            "Position": "Circulate",
+            "Speed": 1
+          },
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setThermostatFanMode",
+      "args": [
+        "on"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_fan",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/fanSwitch",
+        "body": {
+          "FanSwitch": {
+            "Position": "On",
+            "Speed": 1
+          },
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "fanOn",
+      "args": [],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_fan",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/fanSwitch",
+        "body": {
+          "FanSwitch": {
+            "Position": "On",
+            "Speed": 1
+          },
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHold",
+      "args": [
+        "none"
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true
+      },
+      "upstream_method": "set_hold",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/hold",
+        "body": {
+          "Status": "NoHold",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHold",
+      "args": [
+        "temporary"
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true
+      },
+      "upstream_method": "set_hold",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/hold",
+        "body": {
+          "Status": "TemporaryHold",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHold",
+      "args": [
+        "permanent"
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true
+      },
+      "upstream_method": "set_hold",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/hold",
+        "body": {
+          "Status": "PermanentHold",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "resumeSchedule",
+      "args": [],
+      "sensor": false,
+      "setup": {
+        "schedule": true
+      },
+      "upstream_method": "set_hold",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/hold",
+        "body": {
+          "Status": "NoHold",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        68.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": false,
+        "hold": "NoHold"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 68.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        78.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": false,
+        "hold": "NoHold"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 78.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        68.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": false,
+        "hold": "PermanentHold"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 68.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        78.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": false,
+        "hold": "PermanentHold"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 78.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        68.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "NoHold"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "TemporaryHold",
+          "SetpointValue": 68.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        78.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "NoHold"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "TemporaryHold",
+          "SetpointValue": 78.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        68.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "TemporaryHold"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "TemporaryHold",
+          "SetpointValue": 68.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        78.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "TemporaryHold"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "TemporaryHold",
+          "SetpointValue": 78.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        68.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "PermanentHold"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 68.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        78.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "PermanentHold"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 78.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        68.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "VacationHold"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 68.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        78.5
+      ],
+      "sensor": false,
+      "setup": {
+        "schedule": true,
+        "hold": "VacationHold"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 78.5,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setScheduleEnabled",
+      "args": [
+        "off"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_schedule_enabled",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/schedule/enabled",
+        "body": {
+          "ScheduleEnabled": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setFeelsLikeEnabled",
+      "args": [
+        "off"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_feels_like",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/feelsLike",
+        "body": {
+          "FeelsLikeEnabled": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setAdaptiveRecoveryEnabled",
+      "args": [
+        "off"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_adaptive_recovery",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/adaptiveIntelligentRecovery",
+        "body": {
+          "Mode": "None",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setEmergencyHeatEnabled",
+      "args": [
+        "off"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "Heat",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setScheduleEnabled",
+      "args": [
+        "on"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_schedule_enabled",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/schedule/enabled",
+        "body": {
+          "ScheduleEnabled": true,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setFeelsLikeEnabled",
+      "args": [
+        "on"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_feels_like",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/feelsLike",
+        "body": {
+          "FeelsLikeEnabled": true,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setAdaptiveRecoveryEnabled",
+      "args": [
+        "on"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_adaptive_recovery",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/adaptiveIntelligentRecovery",
+        "body": {
+          "Mode": "AdaptiveIntelligentRecovery",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setEmergencyHeatEnabled",
+      "args": [
+        "on"
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_system_switch",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/systemSwitch",
+        "body": {
+          "SystemSwitchValue": "EmergencyHeat",
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setSetpointLimits",
+      "args": [
+        50,
+        85,
+        55,
+        90
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_setpoint_capabilities",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/setPointCapabilities",
+        "body": {
+          "minHeatSetpoint": 50,
+          "maxHeatSetpoint": 85,
+          "minCoolSetpoint": 55,
+          "maxCoolSetpoint": 90,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setSetpointLimits",
+      "args": [
+        10,
+        30,
+        15,
+        32
+      ],
+      "sensor": false,
+      "setup": {
+        "scale": "C"
+      },
+      "upstream_method": "set_setpoint_capabilities",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/setPointCapabilities",
+        "body": {
+          "minHeatSetpoint": 50,
+          "maxHeatSetpoint": 86,
+          "minCoolSetpoint": 59,
+          "maxCoolSetpoint": 90,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setFreezeProtectionLowLimit",
+      "args": [
+        35
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_freeze_protection",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/freezeProtection",
+        "body": {
+          "LowLimitDegrees": 35,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setFreezeProtectionLowLimit",
+      "args": [
+        45
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_freeze_protection",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/freezeProtection",
+        "body": {
+          "LowLimitDegrees": 45,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setFreezeProtectionLowLimit",
+      "args": [
+        40.6
+      ],
+      "sensor": false,
+      "setup": {},
+      "upstream_method": "set_freeze_protection",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/freezeProtection",
+        "body": {
+          "LowLimitDegrees": 41,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setFreezeProtectionLowLimit",
+      "args": [
+        5
+      ],
+      "sensor": false,
+      "setup": {
+        "scale": "C"
+      },
+      "upstream_method": "set_freeze_protection",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/freezeProtection",
+        "body": {
+          "LowLimitDegrees": 41,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setHeatingSetpoint",
+      "args": [
+        20
+      ],
+      "sensor": false,
+      "setup": {
+        "scale": "C"
+      },
+      "upstream_method": "set_heat_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/heatSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 68.0,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setCoolingSetpoint",
+      "args": [
+        25
+      ],
+      "sensor": false,
+      "setup": {
+        "scale": "C"
+      },
+      "upstream_method": "set_cool_setpoint",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/coolSetpoint",
+        "body": {
+          "SetpointStatus": "PermanentHold",
+          "SetpointValue": 77.0,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setOccupancySensitivity",
+      "args": [
+        "off"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Off",
+          "excludeMotion": true,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setOccupancySensitivity",
+      "args": [
+        "low"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Low",
+          "excludeMotion": true,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setOccupancySensitivity",
+      "args": [
+        "medium"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Medium",
+          "excludeMotion": true,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setOccupancySensitivity",
+      "args": [
+        "high"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "High",
+          "excludeMotion": true,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setExcludeMotion",
+      "args": [
+        "off"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Medium",
+          "excludeMotion": false,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setExcludeTemperature",
+      "args": [
+        "off"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Medium",
+          "excludeMotion": true,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setExcludeMotion",
+      "args": [
+        "on"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Medium",
+          "excludeMotion": true,
+          "excludeTemp": false,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    },
+    {
+      "command": "setExcludeTemperature",
+      "args": [
+        "on"
+      ],
+      "sensor": true,
+      "setup": {
+        "excludeMotion": true,
+        "excludeTemp": false,
+        "sensitivity": "Medium"
+      },
+      "upstream_method": "set_accessory_value",
+      "request": {
+        "method": "PUT",
+        "url": "https://api.ha.resideo.com/ris-public-api/api/v1/devices/thermostats/AABBCCDDEEFF/accessories/1/accessoryValue",
+        "body": {
+          "sensitivity": "Medium",
+          "excludeMotion": true,
+          "excludeTemp": true,
+          "ChannelId": "ds-notification-service"
+        }
+      }
+    }
+  ]
+}
